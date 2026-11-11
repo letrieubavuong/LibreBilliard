@@ -371,28 +371,32 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
       );
     }
 
-    // 8. Lấy trạng thái 3 bi tại thời điểm vật lý tương ứng với animationProgress
-    const double strikePhaseEnd = 0.10;
+    // 8. Lấy trạng thái 3 bi tại thời điểm vật lý tương ứng với animationProgress:
+    // Chuẩn hóa timeline vật lý 1.0x: 0.28s đầu dành cho động tác ra ngọn cơ,
+    // toàn bộ thời gian còn lại (đúng bằng totalDuration) dành cho chuyển động lăn/trượt thực tế của các bi.
+    const double strikeDurationSeconds = 0.28;
     double cueStickStrikeProgress = -1.0;
     double simTime = 0.0;
 
     final sim = simulationResult;
     final totalDuration = sim?.durationSeconds ?? 0.0;
+    final totalPhysicalTimelineSeconds = strikeDurationSeconds + totalDuration;
 
-    if (effectiveProgress <= 0.0001) {
+    if (effectiveProgress <= 0.0001 || totalPhysicalTimelineSeconds <= 0.0) {
       cueStickStrikeProgress = 0.0;
       simTime = 0.0;
-    } else if (effectiveProgress < strikePhaseEnd) {
-      cueStickStrikeProgress =
-          (effectiveProgress / strikePhaseEnd).clamp(0.0, 1.0);
-      simTime = 0.0;
     } else {
-      final moveT =
-          ((effectiveProgress - strikePhaseEnd) / (1.0 - strikePhaseEnd))
-              .clamp(0.0, 1.0);
-      simTime = moveT * totalDuration;
-      if (moveT < 0.06) {
-        cueStickStrikeProgress = 1.0 + (moveT / 0.06) * 0.5;
+      final elapsedSeconds = effectiveProgress * totalPhysicalTimelineSeconds;
+      if (elapsedSeconds < strikeDurationSeconds) {
+        cueStickStrikeProgress =
+            (elapsedSeconds / strikeDurationSeconds).clamp(0.0, 1.0);
+        simTime = 0.0;
+      } else {
+        final ballMoveElapsed = elapsedSeconds - strikeDurationSeconds;
+        simTime = ballMoveElapsed.clamp(0.0, totalDuration);
+        if (ballMoveElapsed < 0.06) {
+          cueStickStrikeProgress = 1.0 + (ballMoveElapsed / 0.06) * 0.5;
+        }
       }
     }
 
@@ -1008,55 +1012,18 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
       );
     }
 
-    Offset pos = Offset(
-      rawTarget.dx.clamp(rD, 8.0 - rD),
-      rawTarget.dy.clamp(rD, 4.0 - rD),
-    );
-
     final others = <Offset>[
       if (element != DraggableTableElement.cueBall) widget.spec.cueBall,
       if (element != DraggableTableElement.objectBall1) widget.spec.objectBall1,
       if (element != DraggableTableElement.objectBall2) widget.spec.objectBall2,
     ];
 
-    final minSep = 2.0 * rD + 0.005;
-    for (int iter = 0; iter < 16; iter++) {
-      bool anyCollision = false;
-      for (final other in others) {
-        final delta = pos - other;
-        final dist = delta.distance;
-        if (dist < minSep) {
-          anyCollision = true;
-          final normal =
-              dist > 1e-5 ? delta / dist : const Offset(0.7071, -0.7071);
-          pos = Offset(
-            (other.dx + normal.dx * minSep).clamp(rD, 8.0 - rD),
-            (other.dy + normal.dy * minSep).clamp(rD, 4.0 - rD),
-          );
-        }
-      }
-      if (!anyCollision) break;
-    }
-
-    // Binary search fallback nếu vẫn còn bi chạm nhau do kẹt góc bàn
-    bool stillColliding = others.any((o) => (pos - o).distance < minSep);
-    if (stillColliding) {
-      final safeStart = _positionOfElement(element);
-      Offset low = safeStart;
-      Offset high = pos;
-      for (int step = 0; step < 12; step++) {
-        final mid = Offset((low.dx + high.dx) / 2.0, (low.dy + high.dy) / 2.0);
-        final collides = others.any((o) => (mid - o).distance < minSep);
-        if (collides) {
-          high = mid;
-        } else {
-          low = mid;
-        }
-      }
-      pos = low;
-    }
-
-    return pos;
+    return CaromTableCanvasLayout.constrainBallPosition(
+      rawTarget: rawTarget,
+      otherBalls: others,
+      ballRadiusInDiamonds: rD,
+      fallbackSafePosition: _positionOfElement(element),
+    );
   }
 
   @override
@@ -1174,7 +1141,7 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
       widget.initialSpec,
       sim: sim,
     );
-    final totalDurationMs = ((0.28 + sim.durationSeconds) * 1000).round().clamp(500, 25000);
+    final totalDurationMs = ((0.28 + sim.durationSeconds) * 1000).round().clamp(280, 50000);
     _controller = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: totalDurationMs),
@@ -1197,7 +1164,7 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
         sim: sim,
         flipLongRail: _flipLongRail,
       );
-      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(500, 50000);
+      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(280, 50000);
       _controller.duration = Duration(milliseconds: totalDurationMs);
     }
   }
@@ -1212,7 +1179,7 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
     setState(() {
       _slowMotion = slow;
       final sim = _resolveSimulation();
-      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(500, 50000);
+      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(280, 50000);
       _controller.duration = Duration(milliseconds: totalDurationMs);
     });
     if (_controller.isAnimating) {

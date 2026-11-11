@@ -69,6 +69,18 @@ class _HomeScreenState extends State<HomeScreen> {
         ..addAll(loaded.customLessons);
       _customLessonCounter = loaded.customLessonCounter;
     });
+    if (loaded.isReadOnly && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            loaded.readOnlyReason ??
+                'Sổ tay đang ở chế độ chỉ đọc để bảo vệ dữ liệu phiên bản mới hơn.',
+          ),
+          backgroundColor: Colors.amber.shade900,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   Future<bool> _persistCurrentNotebookState() async {
@@ -109,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _persistCurrentNotebookState();
   }
 
-  void _savePersonalNote(String id, String note) {
+  Future<bool> _savePersonalNote(String id, String note) async {
     setState(() {
       if (note.isEmpty) {
         _personalNotes.remove(id);
@@ -117,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _personalNotes[id] = note;
       }
     });
-    _persistCurrentNotebookState();
+    return await _persistCurrentNotebookState();
   }
 
   void _openLessonDetail(BilliardLesson lesson) {
@@ -130,10 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
           personalNote: _personalNotes[lesson.id],
           onToggleBookmark: () => _toggleBookmark(lesson.id),
           onIncrementPractice: () => _incrementPractice(lesson.id),
-          onSavePersonalNote: (note) async {
-            _savePersonalNote(lesson.id, note);
-            return await _persistCurrentNotebookState();
-          },
+          onSavePersonalNote: (note) => _savePersonalNote(lesson.id, note),
         ),
       ),
     );

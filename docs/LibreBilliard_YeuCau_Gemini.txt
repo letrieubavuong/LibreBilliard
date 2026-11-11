@@ -1,0 +1,163 @@
+PHẢN BIỆN MÃ NGUỒN VÀ YÊU CẦU GEMINI SỬA LIBREBILLIARD
+Ngày: 11/11/2026
+Repository: https://github.com/letrieubavuong/LibreBilliard
+Mốc mã nguồn đã đọc: 7a8fe98939619f89da1dea893403edecab297ffe (main tại thời điểm lấy cây mã nguồn).
+Phạm vi: review tĩnh các model, solver, painter bàn, màn chi tiết, màn tạo hình, bộ số, điều khiển chạm trái/ép-phê, dữ liệu bài học, màn chính và bài test hiện có. Không chạy app, flutter analyze hoặc flutter test vì môi trường review không có Flutter/Dart. Các lỗi hành vi dưới đây được xác định từ luồng mã nguồn; các kiểm thử trong phần nghiệm thu là yêu cầu mới, chưa được chạy.
+
+PHẦN A — KẾT LUẬN VÀ BẰNG CHỨNG
+
+App đã có giao diện học tập, phân loại bài, sơ đồ chạm trái/ép-phê, trình xếp bi và timeline để tái sử dụng. Tuy nhiên, quỹ đạo hiện tại chủ yếu được lấy từ waypoint khai báo sẵn, biến dạng bằng hệ số rồi sửa vị trí để tránh chồng bi. Chưa đủ cơ sở gọi đây là mô phỏng vật lí billiard có điều khiển độ dày, mũi cơ và ép-phê.
+
+1. P0 — Thông số gốc tự động được chấm thành công.
+   lib/models/carom_physics_solver.dart:44–56: khi sai lệch thông số dưới ngưỡng, trả baseDiagram với hitsSecondBall=true và gathersInZone=true. Không kiểm tra sự kiện chạm hoặc vị trí cuối. Một thế bi bất khả thi vẫn có thể được báo gom chính xác nếu dùng thông số gốc.
+
+2. P0 — Đổi độ dày, cao/thấp và ép-phê bằng cách dời điểm đường đi.
+   Cùng file:79–84: followShift dùng 0.22, thicknessShift dùng 0.65, spinShift dùng 0.14. Đây là phép biến dạng waypoint, không tính xung lượng hay vận tốc quay. Không có đầu vào tốc độ ban đầu trong evaluateAdjustedShot.
+
+3. P0 — Painter đang quyết định chuyển động bằng đường mẫu.
+   lib/widgets/diagrams/carom_table_diagram.dart:214–229 và 426 trở đi: chuyển vị trí sang pixel, chọn bán kính từ kích thước widget rồi giải timeline tại paint().
+   Dòng 519–538: tự tạo đường bi đỏ dài 1.35 bán kính khi không có đường mẫu.
+   Dòng 559–590: tìm thời điểm gần bi nhất rồi dùng làm hit1Step/hit2Step, kể cả khi không tìm được lần tiếp xúc đạt ngưỡng.
+   Dòng 606–620: cho bi 1/2 chạy sau mốc thời gian trên, theo đường đã khai báo.
+   Hệ quả: bi có thể chạy hoặc xuất hiện hiệu ứng chạm dù cú đánh thực tế hụt. Không có giải vận tốc sau va chạm.
+
+4. P0 — Đánh giá kết quả không dùng cùng dữ liệu với hoạt ảnh.
+   Solver kiểm tra khoảng cách từ đường bi chủ tới tâm đỏ ban đầu với ngưỡng 0.38 (dòng 130–143). Painter lại sửa đường và vị trí bằng pixel/bán kính khác.
+   gathersInZone chỉ xét bi chủ và bi vàng, bỏ bi đỏ; còn tự nới bán kính vùng gom 15% (dòng 146–155). Không có vùng gom thì mặc định true. Feedback có thể khẳng định cả 3 bi được gom dù không kiểm tra đủ.
+
+5. P0 — Màn tự xếp bi chưa nối thông số cú đánh vào quỹ đạo.
+   lib/screens/custom_position_builder_screen.dart:51–68: đường bi chủ luôn là [bi1, bi2, vùng gom]; bi vàng luôn qua điểm băng (_objectBall1.dx*0.7,0), bi đỏ luôn đi vùng gom. _contact, _effet, _speedLevel không tham gia hàm này. Chúng được lưu làm metadata nhưng chưa sinh chuyển động.
+
+6. P1 — Kết quả phụ thuộc kích thước hiển thị, chế độ cận cảnh.
+   carom_table_diagram.dart:155–159 chuyển tọa độ theo hai hệ số màn hình; dòng 214 clamp bán kính pixel; dòng 434 dùng minSep=2.06R. Việc tách vị trí ban đầu và waypoint vì thế phụ thuộc viewport. Cận cảnh đổi maxLongUnits và playRect, rồi tính lại timeline. Cần mô phỏng trong đơn vị vật lí cố định, zoom chỉ thay camera.
+
+7. P1 — Xoay chấm đỏ hiện là hiệu ứng theo quãng đường.
+   carom_table_diagram.dart:660–662 cộng spin từ distance/(0.85R). Không thể hiện được bi đang quay lùi nhưng tâm tiến tới, hay bi quay tại chỗ. Dòng 301 dùng easing để tạo giảm tốc hình ảnh. Vận tốc, ma sát và spin thực chưa được tích phân.
+
+8. P1 — Mũi cơ hiển thị và giá trị lưu chưa thống nhất miền hợp lệ.
+   billiard_specs.dart:175–182 chỉ chiếu vector xuống giới hạn 0.88 khi lấy normalizedTipOffset; giá trị raw h/v vẫn có thể khác vị trí đã chiếu. fromTips không kiểm tra miền. copyWith clamp riêng từng trục nên vẫn cho phép tổ hợp vượt miền tròn.
+   cue_ball_effet_diagram.dart:16 và 142 dùng công thức bán kính có/không clamp khác nhau; khi đổi kích thước cần chung phép biến đổi và nghịch đảo. Với kích thước interactive hiện tại 96px, lỗi clamp bán kính chưa biểu hiện, nhưng sự khác nhau vẫn cần loại bỏ khi hỗ trợ responsive.
+   ball_contact_diagram.dart: còn thiếu lựa chọn tràn mặt trực tiếp; ContactSide.center được hiển thị như lựa chọn phải và có thể đi cùng fraction không bằng 1. Cần quy tắc dữ liệu nhất quán.
+
+9. P1 — Bộ số đang dùng công thức/đường mẫu, chưa kiểm chứng bởi engine.
+   lib/widgets/system_calculator_card.dart:45–118: dựng các waypoint và hiệu chỉnh tuyến tính bằng ép-phê. Giữ chúng như hướng dẫn phương pháp bộ số có điều kiện áp dụng; không dùng làm định luật va chạm hoặc ép engine đi qua điểm mong muốn. Chưa có cơ sở trong code để khẳng định các hằng hiệu chỉnh đúng cho mọi bàn/lực/góc tới.
+
+10. P1 — Chưa có test vật lí.
+    test/widget_test.dart chỉ kiểm tra giao diện/tab/sơ đồ. Không kiểm tra động lượng, năng lượng, cú hụt, cu-lê/trô, băng, hoặc độc lập viewport.
+
+11. P2 — Sổ tay chưa lưu bền vững.
+    lib/screens/home_screen.dart: danh sách bài cá nhân, bookmark, ghi chú, số lượt tập chỉ ở State/List/Map. Thoát tiến trình sẽ mất thay đổi. Đây là phần việc riêng, thực hiện sau nền vật lí nhưng phải sửa trước khi dùng sổ tay thực tế.
+
+PHẦN B — PROMPT GIAO GEMINI
+Sao chép từ dòng “BẮT ĐẦU LỆNH” đến “KẾT THÚC LỆNH”.
+
+BẮT ĐẦU LỆNH
+
+Bạn là kỹ sư Flutter/Dart phụ trách sửa mô phỏng billiard carom LibreBilliard.
+Repo: https://github.com/letrieubavuong/LibreBilliard
+Mốc review: 7a8fe98939619f89da1dea893403edecab297ffe.
+Mục tiêu: sinh quỹ đạo của 3 bi từ thế bi, hướng cơ, độ dày chạm, vị trí mũi cơ và lực đánh; có va chạm bi–bi, bi–băng, ma sát vải và vận tốc quay. Giữ giao diện học tập và nội dung bài hiện có trong quá trình chuyển đổi.
+
+I. KHẢO SÁT VÀ QUẢN LÍ THAY ĐỔI
+1. Đọc AGENTS.md nếu có, kiểm tra branch/HEAD và thay đổi chưa commit. Nếu HEAD đã khác mốc review, đối chiếu lại từng nhận xét; không sửa theo số dòng cũ một cách máy móc.
+2. Tạo branch fix/physics-engine-v1 từ HEAD phù hợp. Không ghi đè công việc đang có; không force-push hoặc xóa dữ liệu bài học.
+3. Tách thành commit có thể kiểm tra riêng: engine nền; tích hợp UI; quay/ma sát/băng; chuyển dữ liệu và kiểm chứng. Không thay toàn bộ app bằng một bản demo mới.
+4. Đọc tối thiểu các file nêu ở PHẦN A trước khi sửa. Đưa kết luận khảo sát ngắn kèm danh sách hàm cần thay, rồi thực hiện. Không dừng ở kế hoạch.
+
+II. LOẠI BỎ NGUỒN SAI KẾT QUẢ
+1. Xóa nhánh tự động hitsSecondBall=true/gathersInZone=true khi thông số giống bài mẫu. Đúng/sai phải tính từ kết quả engine, kể cả preset mặc định.
+2. Bỏ phép dời waypoint followShift/thicknessShift/spinShift khỏi đường mô phỏng vật lí. Có thể giữ đường bài mẫu như lớp hướng dẫn riêng, không điều khiển chuyển động.
+3. Bỏ logic tự kích hoạt hit1Step/hit2Step từ lần đi gần nhất. Không có va chạm thật thì không phát ripple, không truyền vận tốc và không cho bi đích chạy.
+4. Bỏ cú đẩy bi đỏ cố định 1.35R. Quãng đường bi đỏ phải do vận tốc sau chạm và ma sát quyết định.
+5. Bỏ việc ép bi đi tới vùng gom. Vùng gom là mục tiêu để đánh giá, không là đầu vào lực hoặc đích hút bi.
+6. Không dùng easing, Bezier hoặc teleport/tách vị trí để giả lập cu-lê/trô. Hiệu chỉnh chồng lấp chỉ xử lí sai số số học nhỏ; dữ liệu ban đầu không hợp lệ phải được báo và cho người dùng sửa.
+
+III. THIẾT KẾ ENGINE ĐỘC LẬP UI
+1. Tạo thư mục lib/physics/ hoặc cấu trúc tương đương. Engine dùng Dart độc lập Flutter, không import material.dart/Canvas/Size. Có vector đủ dùng và lớp immutable cho snapshot.
+2. Dùng mét, giây, kg, radian nội bộ. TableConfig chứa kích thước lòng bàn, bán kính/khối lượng bi, hệ số đàn hồi, ma sát vải trượt/lăn/quay, ma sát bi–bi và bi–băng. Các giá trị mặc định phải có nguồn và ghi rõ phần nào cần hiệu chỉnh thực nghiệm.
+3. TableDiagramSpec 8×4 nút được chuyển đổi ở adapter duy nhất. Không dùng bán kính pixel để tính va chạm. Bán kính vẽ lấy từ bán kính vật lí và cùng hệ số scale.
+4. BallState chứa position, linearVelocity, angularVelocity 3 thành phần, orientation để vẽ chấm xoay nếu cần. 2D bàn không có nghĩa chỉ lưu một góc spin. V1 có thể giới hạn tâm bi trên mặt bàn nhưng phải ghi rõ chưa hỗ trợ nhảy bi/massé đầy đủ nếu chưa làm.
+5. ShotInput chứa hướng cơ, lực/tốc độ cơ có ánh xạ công khai, tipOffset ngang/dọc theo bán kính thực và góc nâng cơ trong miền hỗ trợ.
+6. SimulationResult chứa snapshots theo thời gian, collisionEvents (thời gian, cặp bi hoặc băng, điểm chạm), trạng thái cuối, thời lượng và trạng thái kết thúc (đã dừng hoặc hết giới hạn mô phỏng). Trường hợp chưa dừng không được coi vị trí cuối cùng là vị trí dừng để chấm gom.
+7. Painter chỉ vẽ SimulationResult; không giải vật lí trong paint(). Cache theo đầu vào và cấu hình. Đổi zoom, lật camera, thumbnail hoặc tua thời gian không chạy lại engine.
+
+IV. HƯỚNG NGẮM VÀ ĐỘ DÀY CHẠM
+1. Chọn rõ định nghĩa fraction là phần chồng theo đường kính nhìn dọc hướng tới, không phải tỉ lệ diện tích hai hình tròn giao nhau.
+2. Với hai bi cùng bán kính R và hướng thẳng tới bi đứng yên, khoảng cách vuông góc từ tâm bi đích đến đường tâm bi chủ là b=2R(1-f). Góc cắt lí tưởng theta=asin(1-f); f=1/2 tương ứng theta=30 độ, f=1 tương ứng trực diện.
+3. Từ vị trí ban đầu và bên trái/phải, giải hướng ngắm phù hợp. Nếu người dùng ngắm tự do thì fraction là giá trị suy ra; nếu chọn fraction thì dùng nó để xác định hướng. Không đồng thời giữ hai đầu vào mâu thuẫn. Xử lí riêng thế quá gần, trùng tâm hoặc không thể dựng hình.
+4. Vẽ bi ảo ở đúng vị trí hai tâm cách nhau 2R. Phân biệt điểm tiếp xúc trên mặt bi và tâm bi ảo.
+5. Hướng ngắm từ fraction là phép dựng hình cho quỹ đạo tới thẳng. Nếu bổ sung squirt/swerve, phải chỉ rõ có/không bù ngắm; fraction yêu cầu và fraction chạm thực tế có thể khác nhau.
+6. Có preset tràn mặt, nửa trái, 1/4, 1/8 và má trái/phải nhất quán. Dùng 1/3 và 2/3 chính xác thay vì 0.33/0.66 ở tầng tính toán.
+
+V. MŨI CƠ, CU-LÊ, TRÔ VÀ ÉP-PHÊ
+1. Một điểm mũi cơ duy nhất gồm tọa độ ngang và dọc trong hệ quy chiếu người đánh. Không tạo thêm tham số ép-phê độc lập mâu thuẫn với độ lệch ngang của điểm này. Cao/thấp và trái/phải được kết hợp trong cùng miền hợp lệ.
+2. Định nghĩa rõ trục thế giới, trục cơ và dấu xoáy. Phép chiếu sang Canvas có Y hướng xuống chỉ ở adapter. Viết test dấu cho trên/dưới/trái/phải.
+3. Giới hạn điểm mũi cơ theo miền tiếp xúc hợp lệ đã chọn, áp dụng ở model và UI. Giá trị lưu, label, điểm vẽ và dữ liệu engine phải cùng một giá trị sau kiểm tra; không chỉ clamp lúc vẽ.
+4. “Mũi ép-phê” là thang UI cần quy đổi sang độ lệch thật; không coi 1 mũi luôn làm lệch một số nút băng cố định. Công khai cách quy đổi và khả năng hiệu chỉnh.
+5. Từ mô hình va chạm cơ–bi có nguồn, tính vận tốc và vận tốc góc ban đầu. Quan hệ cơ bản: delta v=J/m; delta omega=I^-1(r×J), I=2mR²/5 cho cầu đặc đồng chất. Cần mô hình xác định J từ tốc độ cơ/khối lượng hiệu dụng; không đưa J tùy ý rồi tuyên bố đã mô phỏng cơ thật.
+6. Không biến chuỗi strokeType thành lực đặc biệt bí mật. Giữ tên kiểu ra cơ làm hướng dẫn hoặc ánh xạ qua tham số vật lí được giải thích và kiểm chứng. Với cùng trạng thái bi sau cơ chạm, cùng bàn và cùng thế bi, diễn biến phải giống nhau.
+7. Lực 1–5 phải thực sự đổi vận tốc đầu vào theo bảng hoặc hàm rõ ràng. Không chỉ đổi thời lượng phát hoạt ảnh.
+
+VI. TƯƠNG TÁC VỚI VẢI VÀ VA CHẠM
+1. Trong pha trượt, xét vận tốc tương đối của điểm tiếp xúc vải: u=v+omega×(-R k), k hướng lên khỏi bàn. Ma sát chống u, không luôn chống v của tâm bi.
+2. Cập nhật cả vận tốc tịnh tiến và góc do lực/mômen ma sát. Phát hiện chuyển trượt→lăn khi u về 0 mà không đảo dấu qua lại do bước thời gian. Pha lăn dùng mô hình cản lăn riêng; quay quanh trục đứng có suy giảm riêng.
+3. Chạm bi–bi: phát hiện tiếp xúc liên tục hoặc dùng bước thích nghi/CCD đủ chặt để không xuyên bi. Ở chế độ lí tưởng kiểm chứng với n từ bi1 tới bi2, s=(v1-v2)·n>0, Jn=(1+e)s/(1/m1+1/m2), v1'=v1-Jn*n/m1, v2'=v2+Jn*n/m2.
+4. Chế độ có ma sát giữa bi: tính vận tốc tương đối tại hai điểm bề mặt gồm omega×r; giải xung lượng tiếp tuyến với giới hạn Coulomb |Jt|≤mu*Jn và cập nhật spin hai bi. Cần phân biệt trượt và bám; không cộng một góc throw cố định.
+5. Bi–băng: pháp tuyến từ hình học băng; giải xung lượng pháp tuyến/tiếp tuyến, tổn hao và đổi spin. Chỉ phản xạ góc bằng nhau là chế độ lí tưởng kiểm thử, không đủ cho ép-phê. Dùng mô hình băng billiard có tài liệu và nêu giới hạn khi rút gọn.
+6. Chọn solver theo sự kiện hoặc bước cố định có CCD và tích phân hội tụ; ghi rõ phương pháp và ngưỡng. Phân biệt bước giải vật lí với số frame hiển thị. Không cố định một cú đánh thành 120 bước không có đơn vị thời gian.
+7. Xử lí bi đứng chạm nhau, va chạm lặp, gần góc băng và nhiều tiếp xúc gần đồng thời. Có giới hạn lặp và cơ chế báo hết giới hạn; không sinh năng lượng hoặc vòng lặp vô hạn.
+8. Tua, pause và 0.5× chỉ đọc timeline theo thời gian, không đổi tham số vật lí. Nội suy hình vẽ không được làm hai bi xuyên nhau giữa các snapshot; ưu tiên lấy trạng thái chính xác theo phân đoạn sự kiện ở đoạn có va chạm.
+
+VII. TÍCH HỢP VÀ CHUYỂN DỮ LIỆU
+1. lesson_detail_screen: tính từ vị trí ban đầu + ShotInput + TableConfig, không từ quỹ đạo mẫu làm nguồn chuyển động. Đổi độ dày/mũi cơ/lực phải sinh result mới; thay đổi camera giữ result.
+2. custom_position_builder_screen: bỏ đường luôn qua bi1→bi2→vùng gom. Có thao tác ngắm và chạy thử thật; thay lực/ép-phê phải tác động engine. Kéo bi không chồng nhau, trong lòng bàn theo bán kính thật; chạm nền không tự kéo viên gần nhất từ xa. Dùng ngưỡng hit-test và giữ độ lệch ngón tay khi bắt đầu kéo.
+3. Hình mẫu: giữ đường cũ như sơ đồ hướng dẫn và gắn trạng thái chưa kiểm chứng. Tạo ShotInput có thể tái lập cho từng bài được chuyển đổi. Bài nào chưa đủ dữ liệu hoặc engine chưa hỗ trợ thì hiển thị “Sơ đồ hướng dẫn”, không báo nghiệm thu vật lí. Không chỉnh solver để ép bài mẫu thành công.
+4. Bộ số: giữ công thức/hình minh họa, ghi điều kiện áp dụng và phân biệt với quỹ đạo tính từ engine. Kiểm tra lại quy ước đánh số từng hệ; không mặc định tọa độ nút chia đều là toàn bộ quy tắc của mọi bộ số.
+5. Camera cận cảnh/lật bàn chỉ biến đổi hiển thị. Nếu thêm chức năng tạo một cú đánh phản chiếu mới, phải biến đổi hướng, má chạm và spin nhất quán; phân biệt nó với lật camera.
+6. Hit/gom lấy từ cùng SimulationResult được vẽ: cue phải thực sự chạm cả hai bi đích trong lượt theo quy tắc đang chọn. Bi vàng tự chạm đỏ không thay thế lần cue chạm đỏ. Xét cả 3 bi khi chấm gom và công khai tiêu chí tâm hay toàn bộ bi nằm trong vùng. Không tự nới 15% âm thầm. Không có vùng gom thì trạng thái “không áp dụng”, không phải true.
+7. Feedback mô tả điều engine đo được: chạm bi nào, lúc nào, vị trí cuối, khoảng cách tới vùng mục tiêu. Không gán chắc chắn lỗi “dư trô/dư cu-lê” chỉ vì dấu sai lệch so với preset.
+8. Ở bước riêng sau nền vật lí, lưu hình cá nhân, ghi chú, bookmark, lượt tập và toàn bộ ShotInput/TableConfig bằng storage có schema/version. Kiểm tra khởi động lại và lỗi ghi; chỉ báo đã lưu khi ghi thành công.
+
+VIII. NGHIỆM THU BẮT BUỘC
+Viết test nền độc lập UI và test tích hợp cho các tình huống sau. Dung sai phải ghi rõ trong test/report, không tăng tùy tiện để làm xanh.
+1. Va chạm trực diện hai bi bằng nhau, e=1, không ma sát/quay: bi1 dừng, bi2 nhận vận tốc của bi1; động lượng và động năng bảo toàn trong sai số số học.
+2. Va chạm xiên trong cùng chế độ lí tưởng: khớp công thức vector; hai vận tốc khác 0 sau chạm vuông góc; f=1/2 cho góc cắt 30 độ theo định nghĩa đã chọn.
+3. Cú hụt rõ ràng, kể cả dùng thông số gốc của một lesson: không event chạm, bi đích đứng yên, không ripple, không ghi điểm.
+4. Bi đang tách nhau: không nhận thêm xung lượng va chạm. Bi đặt chạm sát nhưng đứng yên: không tự chạy.
+5. Cùng thế trực diện, spin được đặt trực tiếp ở thời điểm chạm: stun dừng gần điểm chạm; backspin đủ lớn tạo kéo; topspin tạo tiến. Sau đó kiểm thử trọn quá trình từ mũi cơ đến chạm bi.
+6. Cùng mũi cơ thấp nhưng quãng đường tới bi đích khác nhau: kiểm tra backspin suy giảm/chuyển trạng thái theo vải; không mặc định mọi cú đặt thấp đều kéo.
+7. Cặp cú đánh đối xứng trái/phải trong bàn và thế đối xứng: kết quả đối xứng đúng dấu. Ép-phê ngang với cơ ngang trên mặt bàn phẳng, mô hình đối xứng: không tự sinh đường cong ngang vô cớ trong pha chạy tự do. Nếu hỗ trợ squirt/swerve thì kiểm thử đúng điều kiện và nguồn mô hình.
+8. Chạm băng cùng góc và tốc độ nhưng ép-phê thuận/nghịch: góc ra khác theo mô hình băng đã chọn; không theo hằng số số nút/mũi.
+9. Tốc độ cao: không xuyên bi/băng. Kiểm tra cả trạng thái phát lại giữa snapshot, không chỉ các frame lưu.
+10. Đổi kích thước widget, thumbnail, fullscreen, cận cảnh và camera: result vật lí, thời điểm va chạm, tọa độ cuối không đổi. Camera không gọi lại solver.
+11. Preview, phát thường, chậm, tua và feedback dùng cùng result. Thời gian va chạm và vị trí va chạm trùng nhau theo dung sai công khai.
+12. Gom bi: đặt bi đỏ ngoài vùng dù trắng/vàng ở trong phải không đạt; không vùng gom là không áp dụng; nếu result hết thời gian trước khi dừng thì không chấm gom như đã kết thúc.
+13. Đổi lực trong màn xếp bi: thay vận tốc đầu vào và diễn biến đúng; thay vị trí mũi cơ đổi omega ban đầu; giữ nguyên đầu vào lặp lại có cùng kết quả.
+14. Trong hệ thụ động không có cơ tiếp tục tác động, tổng động năng tịnh tiến + quay không tăng vượt dung sai. Không yêu cầu riêng động năng tịnh tiến luôn giảm vì xoáy có thể chuyển thành chuyển động tâm bi.
+15. Kiểm tra hội tụ: giảm bước thời gian/siết ngưỡng solver, các thời điểm chạm và trạng thái cuối ổn định. Không dùng so ảnh đẹp làm bằng chứng vật lí đúng.
+16. Lưu hình cá nhân rồi đóng/khởi động lại app: toàn bộ thế bi và thông số còn nguyên. Tình huống lỗi ghi phải có thông báo đúng.
+
+IX. CHIA MỐC THỰC HIỆN
+P0: engine va chạm lí tưởng, đơn vị thật, cú hụt, bỏ nhánh tự thành công, cùng result cho preview/playback/feedback, độc lập camera.
+P1: mô hình cơ–bi, trượt/lăn/quay, cu-lê/trô/ép-phê, ma sát bi–bi và băng, UI nối đầy đủ và bộ fixture kiểm chứng.
+P2: chuyển/hiệu chỉnh toàn bộ bài mẫu, bộ số có nguồn và điều kiện áp dụng, lưu bền vững, tối ưu hiệu năng.
+Làm tuần tự và bàn giao từng mốc dùng được. Có thể mô phỏng tốt trong phạm vi hạn chế trước; không gắn nhãn “chính xác” cho hiệu ứng chưa có mô hình và kiểm chứng.
+
+X. BÀN GIAO
+1. Danh sách file đổi và commit SHA; mô tả đường dữ liệu từ thao tác người dùng tới engine tới painter.
+2. flutter analyze, flutter test và lệnh build APK trên máy có SDK; kèm kết quả thực tế. Nếu bị chặn, ghi nguyên nhân, không ghi PASS.
+3. APK để người dùng cài nghiệm thu, checksum, phiên bản/build và hướng dẫn ngắn mở từng thế test. Không chỉ gửi mã nguồn hoặc ảnh chụp.
+4. Bảng test: đầu vào, kết quả mong đợi, kết quả đo, dung sai, PASS/FAIL, phạm vi mô hình. Kèm video trực diện stun, kéo, cu-lê, chạm mỏng, ép-phê qua băng và cú hụt.
+5. Báo cáo công thức, nguồn, đơn vị, quy ước dấu, cấu hình mặc định, tham số đã hiệu chỉnh và hiệu ứng chưa hỗ trợ. Test nội bộ đúng chưa chứng minh khớp bàn thật: ghi riêng bằng chứng so với phép giải/tài liệu và bằng chứng đối chiếu video đo thực nghiệm.
+6. Rollback bằng commit/revert theo từng mốc; mô tả migration dữ liệu và bảo vệ sổ tay.
+
+Nguồn khởi đầu để đọc và đối chiếu, không sao chép mù quáng:
+- https://ekiefl.github.io/2020/04/24/pooltool-theory/
+- https://github.com/ekiefl/pooltool
+- https://pooltool.readthedocs.io/en/latest/autoapi/pooltool/physics/index.html
+- https://drdavepoolinfo.com/tutorial/throw/
+- https://drdavepoolinfo.com/tutorial/draw/
+- https://drdavepoolinfo.com/tutorial/sidespin/
+Nếu tái sử dụng mã, kiểm tra giấy phép và lưu nguồn/phiên bản tương ứng. Các thông số thực nghiệm của pool cần được kiểm tra khi áp dụng cho carom; không mặc định giống nhau.
+
+KẾT THÚC LỆNH

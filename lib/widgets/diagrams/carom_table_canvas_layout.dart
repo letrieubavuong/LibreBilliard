@@ -133,4 +133,57 @@ class CaromTableCanvasLayout {
     final d = canvasToDiamond(canvasPos);
     return config.diamondToMeters(Vec2(d.dx, d.dy));
   }
+
+  /// Thuật toán giới hạn vị trí kéo thả bóng không bao giờ vượt biên bàn và không chồng lấn (< 2R)
+  /// với các viên bi khác, sử dụng 16 chu kỳ chiếu xen kẽ kết hợp tìm kiếm nhị phân fallback khi kẹt góc.
+  static Offset constrainBallPosition({
+    required Offset rawTarget,
+    required List<Offset> otherBalls,
+    required double ballRadiusInDiamonds,
+    Offset? fallbackSafePosition,
+  }) {
+    final rD = ballRadiusInDiamonds;
+    Offset pos = Offset(
+      rawTarget.dx.clamp(rD, 8.0 - rD),
+      rawTarget.dy.clamp(rD, 4.0 - rD),
+    );
+
+    final minSep = 2.0 * rD + 0.005;
+    for (int iter = 0; iter < 16; iter++) {
+      bool anyCollision = false;
+      for (final other in otherBalls) {
+        final delta = pos - other;
+        final dist = delta.distance;
+        if (dist < minSep) {
+          anyCollision = true;
+          final normal =
+              dist > 1e-5 ? delta / dist : const Offset(0.7071, -0.7071);
+          pos = Offset(
+            (other.dx + normal.dx * minSep).clamp(rD, 8.0 - rD),
+            (other.dy + normal.dy * minSep).clamp(rD, 4.0 - rD),
+          );
+        }
+      }
+      if (!anyCollision) break;
+    }
+
+    // Binary search fallback nếu vẫn còn bi chạm nhau do kẹt góc bàn
+    bool stillColliding = otherBalls.any((o) => (pos - o).distance < minSep);
+    if (stillColliding && fallbackSafePosition != null) {
+      Offset low = fallbackSafePosition;
+      Offset high = pos;
+      for (int step = 0; step < 12; step++) {
+        final mid = Offset((low.dx + high.dx) / 2.0, (low.dy + high.dy) / 2.0);
+        final collides = otherBalls.any((o) => (mid - o).distance < minSep);
+        if (collides) {
+          high = mid;
+        } else {
+          low = mid;
+        }
+      }
+      pos = low;
+    }
+
+    return pos;
+  }
 }

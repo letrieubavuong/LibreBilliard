@@ -1,0 +1,121 @@
+LIBREBILLIARD — ĐÁNH GIÁ LẦN 3
+Ngày: 11/11/2026
+HEAD: f89598ffab96801281c8aeca899ac47bc453efd8
+Repo: https://github.com/letrieubavuong/LibreBilliard
+So sánh: 359344053a40dd1bdc47148a5f24bd5a7d2bd89b → f89598ffab96801281c8aeca899ac47bc453efd8 (thêm 4 commit).
+
+KẾT LUẬN
+Bản mới đã sửa những lỗi nền tảng cụ thể của lần trước: hai phản ví dụ tự sinh năng lượng không còn cho kết quả tăng năng lượng theo công thức hiện tại; tốc độ qua lesson adapter tăng đơn điệu; bỏ góc override KT-01; input có validation; bố cục có scale đồng nhất; UI đã nhận bool khi lưu. Ghi nhận các phần này, không yêu cầu làm lại từ đầu.
+Chưa đủ bằng chứng nghiệm thu “mô phỏng chính xác toàn bộ các thế bi”. Những việc còn lại chủ yếu là tính đúng của mô hình băng/nâng cơ, xác thực bài học theo đúng kỹ thuật, tính đầy đủ CCD, bảo vệ dữ liệu và bằng chứng chạy/build.
+
+PHẠM VI
+- Review mã tại SHA cố định, AGENTS.md, quy trình kiểm chứng trong repo và docs/PHYSICS_ENGINE_REPORT.md; đối chiếu báo cáo lần 2.
+- Có tính số độc lập bằng Python dựa trên biểu thức trong code để kiểm hai regression năng lượng cũ, một ca grazing của CCD và ánh xạ thời gian phát. Đây không phải log flutter test.
+- Môi trường hiện không có Flutter/Dart. Chưa chạy analyze/test hoặc cài APK.
+- Actions API trả 0 workflow runs; Releases API trả rỗng tại thời điểm kiểm tra. Chưa có bằng chứng CI/release công khai được kiểm chứng, không suy diễn rằng tác giả chưa chạy test trên máy riêng.
+
+I. CÁC LỖI CŨ ĐÃ CÓ SỬA ĐỔI ĐÚNG
+1. Cue strike: cue_strike.dart:73 đã thay hệ số 0.35 thành 2.5. Có computeStrikeMechanics với cả năng lượng cơ sau chạm. Ca tip=(0,0.8), cueSpeed=1, cơ ngang, cấu hình mặc định:
+   E_bi mới = 0.08950847730 J;
+   E_cơ+bi sau = 0.24316558259 J;
+   E_cơ trước = 0.26000000000 J.
+   Phản ví dụ cũ +17.22% đã được đóng ở mức tính lại công thức; chưa kết luận mọi góc nâng đã mô hình đúng hình học.
+2. Cushion: bỏ normalRollBoost và blend 35/65. Ca cũ v=(-0.01,1), omega=0, shortNear:
+   E_trước=0.1050105 J; E_sau=0.104330177868 J; giảm 0.64786%.
+   Ca e=1,mu=0,omega=0 cũng không còn tự sinh spin.
+3. Lực: ShotParameters.effectiveCueSpeedForLevel dùng một hệ số calibration cho tất cả mức, không còn nhánh đảo tốc độ khi chuyển khỏi preset.
+4. KT-01: đã bỏ explicitAimAngleRadians=-3.51703 và đổi customCueSpeed về 1.60; sử dụng hướng Ghost Ball. Cần xác thực kỹ thuật theo mục III, không quay lại lỗi góc cũ.
+5. Validation: engine từ chối input vượt dung sai thay vì đẩy tách đáng kể thế bi; adapter có trạng thái input invalid.
+6. Hiển thị: CaromTableCanvasLayout lấy min(scaleX,scaleY) và căn giữa; dùng chung chuyển đổi thuận/nghịch. Đây là sửa đúng lỗi scale cũ.
+7. Lưu: callback ghi chú chuyển Future<bool>, UI có thông báo lỗi, storage không còn systemTemp fallback. Vẫn còn vấn đề schema/đường dẫn ở mục V.
+
+II. P1 — MÔ HÌNH BĂNG THỰC TẾ CHƯA ĐÚNG VỚI MÔ TẢ “XUNG LƯỢNG VẬT RẮN 3D Ở ĐỘ CAO 1.24R”
+Nguồn: lib/physics/collisions.dart:459–546; docs/PHYSICS_ENGINE_REPORT.md mục 2.2.
+Code đang:
+  Jn=m(1+e)*vNormalIn;
+  vNormalOut=e*vNormalIn;
+  slip ngang=v_t-R*wz;
+  omega_t chỉ bị trừ một mức được kẹp về 0;
+  chiều cao mũi băng đi vào hệ số max(0,2*h_ratio-1), không đi qua một vector điểm tiếp xúc và hệ khối lượng hiệu dụng chung.
+
+Đây là mô hình băng rút gọn có tiêu tán năng lượng, không phải mô hình 3D đầy đủ như báo cáo mô tả. Nếu giả sử điểm tiếp xúc có độ lệch đứng z_c=(h-R) khác 0, xung lượng pháp tuyến n phải có mômen r×(Jn*n), kể cả mu=0. Code hiện để omega_xy không đổi khi mu=0. Hai mô hình đang dùng giả định khác nhau.
+Riêng vector r=-R*n+(h-R)*k trong báo cáo còn có độ dài >R khi h khác R; cần xác định lại hình học điểm trên mặt cầu hoặc giải thích rõ mô hình hiệu dụng.
+
+Đề nghị chọn rõ:
+A. Giữ mô hình rút gọn, công bố giới hạn và bỏ tuyên bố 3D chính xác; chưa dùng để xác nhận các thế phụ thuộc mạnh cu-lê/trô vào băng.
+B. Thực hiện mô hình mũi băng có nguồn, điểm tiếp xúc, normal/tangent, ma trận khối lượng hiệu dụng và cập nhật v/omega nhất quán; xử lí ràng buộc bàn hoặc công bố giới hạn 2D.
+Test bảo toàn năng lượng cần giữ nhưng phải có thêm đối chiếu góc ra/vận tốc/spin với mô hình tham chiếu hoặc video đo thực nghiệm. Mô hình làm bi mất năng lượng đúng không tự động cho góc ra đúng.
+
+III. P1 — CHƯA THỂ ĐÓNG NHÃN VERIFIED CHO TOÀN BỘ 13 BÀI KĨ THUẬT
+Nguồn: lib/data/sample_lessons.dart; test/physics_engine_test.dart:241–280.
+Test mới đã kiểm thêm firstObjectBallHit, fraction và gathers. Đây là tiến bộ thật. Tuy nhiên vẫn chưa kiểm:
+- Số băng chính xác của bi vàng/trắng theo từng bài, kể cả mô tả 1 băng hoặc 2 băng.
+- Bi chủ thật sự kéo lùi 15–25cm ở bài KT-01, hay tiến 10–15cm ở KT-02; vị trí cuối và độ tách bi theo cm.
+- Dấu má chạm thực tế; phần test có trường fraction nhưng chưa assert firstObject1LateralSign.
+- Độ cong/quãng cong, điểm tới của KT-04 trong phạm vi nâng cơ hỗ trợ.
+- Các quy tắc của bài bộ số/3 băng thay vì chỉ chạm đủ 2 bi; BS-03 chỉ được kiểm >=1 băng.
+
+KT-01 còn đổi vùng gom từ radius=0.58 sang 1.25 diamond, tương ứng 20.59cm → 44.375cm, diện tích tăng khoảng 4.64 lần. Đây là thay đổi mục tiêu bài học, không phải chứng cứ tăng độ chính xác. Có thể đổi bài nhưng cần mục tiêu được giáo viên xác nhận và tiêu chí giữ rõ ràng.
+
+Dung sai fraction ở test là 0.05 cho cú phẳng và 0.15 cho góc nâng >15°. Đặc biệt sai lệch 0.15 lớn hơn một số bước preset; không đủ làm chứng nhận chạm đúng độ dày nếu không có lí do định lượng. Test hiện buộc isPhysicsVerified=true từ đầu; không phải cờ tự suy ra từ bộ tiêu chí kỹ thuật đầy đủ.
+
+Yêu cầu: fixture riêng cho từng lesson gồm thứ tự chạm, má, fraction, số băng, quãng kéo/tiến, vùng gom theo cm và giới hạn tách bi. Bài chưa đủ tiêu chí gắn chưa kiểm chứng. Không mở rộng vùng gom hoặc nới dung sai để làm toàn bộ bài xanh mà không giải thích thay đổi mục tiêu.
+
+IV. P1 — CCD BẬC HAI CHƯA BẢO ĐẢM TÌM ĐỦ LẦN CHẠM GẦN TIẾP TUYẾN
+Nguồn: lib/physics/collisions.dart:77–195.
+Phương trình đã được nâng lên quỹ đạo bậc hai và bước được giới hạn chuyển pha. Nhưng tìm nghiệm vẫn chia 8 khoảng, thêm điểm cực tiểu/điểm nghiệm của xấp xỉ tuyến tính, rồi chỉ nhận bracket đổi dấu. Nếu f(t) âm trong một khoảng ngắn nằm giữa các điểm lấy mẫu, hàm trả null dù có hai nghiệm vào/ra.
+
+Phản ví dụ số trong cửa sổ 1ms, dùng R=0.03075:
+  dp0 = (0.0004132884142043356, 0.06150019045489469) m;
+  dv0 = (-1,0) m/s;
+  da = (0,-1.962) m/s²;
+  maxDt=0.001 s.
+Đặt f(t)=|dp0+dv0*t+0.5*da*t²|²-(2R)².
+  f(0.00047)≈-1.23000013e-11 m² (độ xuyên sâu tại cực tiểu khoảng 1e-10 m).
+  Tất cả 8 điểm chia và tLinMin=0.0004132884142 đều có f>0.
+  Discriminant tuyến tính <0 nên không có tLinRoot phụ trợ.
+  Do đó logic hiện tại không có bracket và trả null.
+Gia tốc này có thể tạo bởi slip của một bi sau va chạm: đặt bi A có v=(1,0), omega=( -1/R, 1/R, 0 ) thì u=(0,-1), a_A=(0,+1.962); bi B đứng yên. Dịch đồng thời hai vị trí vào lòng bàn không đổi kết quả.
+
+Mức xuyên của ví dụ rất nhỏ, không gọi đây là lỗi xuyên rõ rệt bằng mắt. Nó chứng minh tuyên bố luôn phát hiện và đạt sai số <1e-11m chưa được bảo đảm bởi thuật toán. Cần giải/ cô lập nghiệm thật của f' (bậc 3) để chia các khoảng đơn điệu, hoặc thuật toán CCD có kiểm soát sai số/giới hạn và kiểm ca grazing. Không chỉ tăng số mẫu cố định.
+Test “CCD & Hội tụ” hiện chỉ xét một ca bi và một ca băng, chưa so kết quả giữa dt,dt/2,dt/4. Thêm convergence thật và sweep cạnh chuyển pha/grazing/corner.
+
+V. P1 — SCHEMA TƯƠNG LAI VẪN CÓ THỂ BỊ GHI ĐÈ HẠ CẤP
+Nguồn: lib/data/notebook_storage.dart:202–209,221–232 và NotebookPersistedState.fromJson.
+Khi đọc version=999: code tạo .future_v999.bak rồi parse về state version hiện tại. saveState không có write guard. Sau khi đổi bookmark/ghi chú, file chính được ghi lại schemaVersion=1, mất trường chưa biết trong file chính. Backup có ích nhưng không đồng nghĩa “không ghi đè” như comment/báo cáo.
+Test version tương lai chỉ kiểm backup tồn tại và state.schemaVersion==1; chưa thử sửa dữ liệu và ghi lại, chưa kiểm file chính giữ nguyên bytes.
+
+Yêu cầu: trạng thái incompatible/read-only hoặc migration có chứng minh giữ đầy đủ dữ liệu. saveState phải từ chối ghi lên bản mới hơn khi chưa migration. Test: load version999 → thử save → file chính không đổi; UI có thông báo phù hợp.
+Đường Android vẫn hardcode /data/data/com.example.xavier_billiard_libre/files; bỏ systemTemp chưa đồng nghĩa lấy đúng thư mục app theo nền tảng. Nên dùng API thư mục ứng dụng; kiểm package đổi tên/profile Android thực tế.
+Ngoài ra HomeScreen callback ghi chú gọi _savePersonalNote (đã persist) rồi persist lần nữa, gây ghi đôi không cần thiết; nên một lần cập nhật và một lần await kết quả lưu.
+
+VI. P2 — THỜI GIAN PHÁT VẪN LỆCH DÙ ĐÃ ĐỔI CONTROLLER DURATION
+Nguồn: carom_table_diagram.dart:375–393,1177–1180,1200–1201.
+Controller dùng (T+0.28)s nhưng painter vẫn dành 10% controller cho cây cơ. Phần bi chuyển động mất 0.9*(T+0.28), không phải T.
+  T=0.5s: bi chạy trong 0.702s, chậm hơn 40.4%.
+  T=2s: bi chạy trong 2.052s, chậm hơn 2.6%.
+  T=14s: bi chạy trong 12.852s, nhanh hơn khoảng 8.2% về thời lượng.
+Yêu cầu: dùng elapsedSeconds; simTime=clamp(elapsedSeconds-0.28,0,T) cho 1×. Hoặc chuẩn hóa strikePhaseEnd=0.28/(T+0.28); giải quyết clamp minimum duration riêng. Slow chỉ đổi clock playback. Test không chỉ kiểm controller.duration.
+
+VII. P1 — BÁO CÁO VÀ TÊN TEST VẪN VƯỢT PHẠM VI ASSERTION
+Nguồn: test/physics_engine_test.dart; docs/PHYSICS_ENGINE_REPORT.md.
+- Test9:327–334 chỉ tạo hai tọa độ sẵn không chồng nhau rồi so khoảng cách. Không thao tác kéo, không gọi thuật toán hạn chế kéo. PASS không xác nhận corner dragging.
+- Test13:440–468 chỉ chuyển tab; chưa tap bài và chưa assert LessonDetailScreen dù tên ghi có mở chi tiết.
+- Test1 có sweep radial tip=(r,0) ở một số góc nâng, không phải toàn bộ grid ngang/dọc và mọi hướng.
+- Test2 sweep một tốc độ 2m/s, vài góc và omega_z; chưa sweep spin 3D và chưa đối chiếu mô hình băng cao.
+- Các test giải tích trực diện/xiên, chuyển trượt→lăn và true-miss của bộ trước không còn hiện diện trong file test mới. Nên giữ regression cũ thay vì thay toàn bộ bằng 13 tên mới.
+- Quy trình repo yêu cầu chạy analyze/test nhưng report chưa kèm raw log/version SDK/SHA build. Actions/Releases hiện không cung cấp bằng chứng thay thế.
+
+Yêu cầu: sửa tên test theo đúng việc được chạy, thêm assertion thực, giữ các regression nền. Thay “khắc phục triệt để mọi góc/lực/xoáy” bằng phạm vi thật đã kiểm chứng. Cung cấp log analyze/test, APK, checksum, SHA và video ngắn các ca trước khi tuyên bố nghiệm thu ứng dụng.
+
+LỆNH NGẮN GỬI GEMINI
+Tiếp tục từ f89598ffab96801281c8aeca899ac47bc453efd8 trên branch riêng. Không làm lại những phần đã sửa đúng: hệ số 2.5 cơ–bi, ánh xạ lực đơn điệu, validation input, uniform scale và Future<bool> lưu.
+1. Chọn và công bố mô hình băng: rút gọn có giới hạn, hoặc đầy đủ với cùng vector tiếp xúc/ma trận effective mass cho v và omega. Đồng bộ report với code, không gọi spin damping là mô hình mũi băng 3D đã kiểm chứng.
+2. Viết fixture kỹ thuật riêng cho từng lesson: thứ tự bi, má, fraction thực, số băng, khoảng kéo/tiến theo cm và gom bi. Giải thích việc mở rộng vùng gom; bài chưa xác thực không đánh isPhysicsVerified=true.
+3. Sửa CCD để cô lập đầy đủ nghiệm/điểm cực trị với kiểm soát sai số; bổ sung ca grazing trong báo cáo này và test hội tụ dt,dt/2,dt/4. Không dùng thêm position correction để che sai số.
+4. Chặn ghi file schema tương lai chưa hỗ trợ; test load999→save giữ nguyên file chính, và xử lí trạng thái read-only trên UI. Lấy thư mục Android từ nền tảng, bỏ ghi đôi callback ghi chú.
+5. Sửa ánh xạ 0.28s chuẩn bị cơ và T giây chuyển động cho playback1×; kiểm bằng clock/time thật.
+6. Thay test corner-drag giả bằng gesture test gọi đúng canvas/solver; mở thật lesson trong smoke test. Khôi phục test giải tích/trượt-lăn/true-miss trước đây và thêm bài gom sai, lỗi ghi, không hỗ trợ schema.
+7. Bàn giao log flutter analyze/test và APK có SHA/checksum; report chỉ nêu PASS của ca thực sự chạy, phân biệt đúng nội bộ và khớp thực nghiệm bàn carom.
+
+Không có thay đổi nào được đẩy vào repo trong lượt review này.

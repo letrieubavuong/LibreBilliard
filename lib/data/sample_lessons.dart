@@ -20,11 +20,11 @@ class SampleLessonsRepository {
         label: 'Sơ đồ Rétro ngắn gom vào góc',
         description:
             'Bi chủ kéo lùi mềm về chạm bi đỏ, bi vàng đi 1 băng ngắn quay lại',
-        cueBall: Offset(2.25, 1.45),
-        objectBall1: Offset(1.52, 1.12),
-        objectBall2: Offset(2.00, 1.10),
-        targetZoneCenter: Offset(1.45, 0.92),
-        targetZoneRadius: 1.25,
+        cueBall: Offset(1.65, 1.45),
+        objectBall1: Offset(0.92, 1.12),
+        objectBall2: Offset(1.40, 1.10),
+        targetZoneCenter: Offset(1.05, 1.00),
+        targetZoneRadius: 0.58,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.threeQuarters(
@@ -157,7 +157,7 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Cú đánh đặc biệt',
       difficulty: 'Nâng cao',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Piqué xử lý thế 3 bi thẳng hàng sát băng',
         description:

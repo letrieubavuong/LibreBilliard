@@ -70,10 +70,93 @@ class CollisionEvent {
 /// Bộ giải Phát hiện Va chạm Liên tục (Continuous Collision Detection - CCD)
 /// và Giải Xung lượng Va chạm Vật rắn 3D (Bi-Bi & Bi-Băng).
 class CollisionPhysics {
+  /// Giải tất cả nghiệm thực của phương trình bậc ba: `a * t^3 + b * t^2 + c * t + d = 0`.
+  /// Dùng công thức Cardano và dạng lượng giác (casus irreducibilis), sau đó tinh chỉnh bằng Newton.
+  static List<double> findCubicRoots(double a, double b, double c, double d) {
+    final roots = <double>[];
+    if (a.abs() <= 1e-15) {
+      if (b.abs() <= 1e-15) {
+        if (c.abs() > 1e-15) {
+          roots.add(-d / c);
+        }
+        return roots;
+      }
+      final disc = c * c - 4.0 * b * d;
+      if (disc >= 0.0) {
+        final sqrtDisc = math.sqrt(disc);
+        roots.add((-c - sqrtDisc) / (2.0 * b));
+        if (disc > 1e-15) {
+          roots.add((-c + sqrtDisc) / (2.0 * b));
+        }
+      }
+      return roots;
+    }
+
+    final a2 = b / a;
+    final a1 = c / a;
+    final a0 = d / a;
+
+    final p = a1 - (a2 * a2) / 3.0;
+    final q = a0 - (a1 * a2) / 3.0 + (2.0 * a2 * a2 * a2) / 27.0;
+    final disc = (q * q) / 4.0 + (p * p * p) / 27.0;
+    final shift = a2 / 3.0;
+
+    double cbrt(double x) {
+      if (x >= 0.0) return math.pow(x, 1.0 / 3.0).toDouble();
+      return -math.pow(-x, 1.0 / 3.0).toDouble();
+    }
+
+    if (disc > 1e-15) {
+      final sqrtDisc = math.sqrt(disc);
+      final u = cbrt(-q * 0.5 + sqrtDisc);
+      final v = cbrt(-q * 0.5 - sqrtDisc);
+      roots.add(u + v - shift);
+    } else if (disc < -1e-15) {
+      final r = 2.0 * math.sqrt(-p / 3.0);
+      final denom = math.sqrt(-p * p * p / 27.0);
+      final cosVal = denom > 1e-15 ? ((-0.5 * q) / denom).clamp(-1.0, 1.0) : 0.0;
+      final phi = math.acos(cosVal) / 3.0;
+      roots.add(r * math.cos(phi) - shift);
+      roots.add(r * math.cos(phi - 2.0 * math.pi / 3.0) - shift);
+      roots.add(r * math.cos(phi - 4.0 * math.pi / 3.0) - shift);
+    } else {
+      if (p.abs() <= 1e-15 && q.abs() <= 1e-15) {
+        roots.add(-shift);
+      } else {
+        final u = cbrt(-0.5 * q);
+        roots.add(2.0 * u - shift);
+        roots.add(-u - shift);
+      }
+    }
+
+    // Tinh chỉnh nghiệm bằng Newton-Raphson trên đa thức gốc
+    for (int i = 0; i < roots.length; i++) {
+      double t = roots[i];
+      for (int iter = 0; iter < 3; iter++) {
+        final fVal = ((a * t + b) * t + c) * t + d;
+        final fDeriv = (3.0 * a * t + 2.0 * b) * t + c;
+        if (fDeriv.abs() > 1e-15) {
+          t -= fVal / fDeriv;
+        }
+      }
+      roots[i] = t;
+    }
+
+    return roots;
+  }
+
   /// Tìm thời điểm va chạm sớm nhất `tau` trong khoảng `[0, maxDt]` giữa hai bi chuyển động
   /// có gia tốc không đổi `a_A`, `a_B` trong cùng một pha chuyển động:
   /// `p_i(t) = p_i0 + v_i0 * t + 0.5 * a_i * t^2`.
   /// Khớp chính xác 100% phương trình tích phân quỹ đạo của `CaromPhysicsEngine.advanceBallOnCloth`.
+  ///
+  /// Giải thuật CCD Bậc hai với Cô lập Cực trị Giải tích (Extrema Root Isolation):
+  /// Đặt `f(t) = ||dp0 + dv0 * t + 0.5 * da * t^2||^2 - (2R)^2`.
+  /// Đạo hàm `f'(t)` là một đa thức bậc ba giải tích `c3*t^3 + c2*t^2 + c1*t + c0`.
+  /// Toàn bộ các điểm cực trị (local extrema / closest approach) của khoảng cách giữa 2 bi
+  /// là nghiệm thực của `f'(t) = 0`, được cô lập bằng công thức giải tích Cardano & dạng lượng giác.
+  /// Chia `[0, maxDt]` theo các điểm cực trị đảm bảo `f(t)` đơn điệu tuyệt đối trên từng khoảng con,
+  /// loại bỏ hoàn toàn khả năng bỏ sót va chạm sượt (grazing collisions) ngay cả khi độ xuyên chỉ `~ 1e-11 m`.
   static double? findBallBallImpactTime({
     required BallState ballA,
     required BallState ballB,
@@ -121,31 +204,29 @@ class CollisionPhysics {
       return null;
     }
 
-    // Với quỹ đạo bậc hai có gia tốc không đổi trên bước nhỏ [0, maxDt]:
-    // Chia [0, maxDt] thành N đoạn nhỏ + điểm cực trị gần đúng t_min = -dp0.dot(dv0) / dv0.lengthSquared
-    // để định vị chính xác khoảng đổi dấu đầu tiên [tL, tR] có f(tL) > 0 và f(tR) <= 0.
+    // 1. Cô lập toàn bộ điểm cực trị giải tích của f(t) trên [0, maxDt] qua nghiệm của f'(t) = 0:
+    // f'(t) = c3 * t^3 + c2 * t^2 + c1 * t + c0
+    final c3 = da.lengthSquared;
+    final c2 = 3.0 * dv0.dot(da);
+    final c1 = 2.0 * (dp0.dot(da) + dv0.lengthSquared);
+    final c0 = 2.0 * dp0.dot(dv0);
+
     final sampleTimes = <double>[0.0];
-    if (dv0.lengthSquared > 1e-14) {
-      final tLinMin = (-dp0.dot(dv0) / dv0.lengthSquared).clamp(0.0, maxDt);
-      if (tLinMin > 1e-12 && tLinMin < maxDt - 1e-12) {
-        sampleTimes.add(tLinMin);
-      }
-      final b = dp0.dot(dv0);
-      final a = dv0.lengthSquared;
-      final disc = b * b - a * f0;
-      if (disc >= 0.0) {
-        final tLinRoot = ((-b - math.sqrt(disc)) / a).clamp(0.0, maxDt);
-        if (tLinRoot > 1e-12 && tLinRoot < maxDt - 1e-12) {
-          sampleTimes.add(tLinRoot);
-        }
+    final extremaRoots = findCubicRoots(c3, c2, c1, c0);
+    for (final r in extremaRoots) {
+      if (r > 1e-14 && r < maxDt - 1e-14) {
+        sampleTimes.add(r);
       }
     }
+
+    // 2. Thêm các điểm phân đoạn đều để tạo lưới dày bảo vệ
     const int subdivisions = 8;
     for (int i = 1; i <= subdivisions; i++) {
       sampleTimes.add(maxDt * (i / subdivisions));
     }
     sampleTimes.sort();
 
+    // 3. Quét tìm khoảng đổi dấu đầu tiên [bracketL, bracketR] có f(bracketL) > 0 và f(bracketR) <= 0
     double? bracketL;
     double? bracketR;
     double prevT = 0.0;
@@ -168,14 +249,14 @@ class CollisionPhysics {
       return null;
     }
 
-    // Tinh chỉnh nghiệm t* trên [bracketL, bracketR] bằng thuật toán lai Newton-Raphson & Chia đôi (10 bước)
+    // 4. Tinh chỉnh nghiệm t* trên [bracketL, bracketR] bằng thuật toán lai Newton-Raphson & Bisection (20 bước)
     double lo = bracketL;
     double hi = bracketR;
     double tStar = 0.5 * (lo + hi);
 
-    for (int iter = 0; iter < 10; iter++) {
+    for (int iter = 0; iter < 25; iter++) {
       final val = f(tStar);
-      if (val.abs() <= 1e-15) break;
+      if (val.abs() <= 1e-15 || (hi - lo) <= 1e-15) break;
       if (val > 0.0) {
         lo = tStar;
       } else {
@@ -455,12 +536,15 @@ class CollisionPhysics {
     );
   }
 
-  /// Giải va chạm giữa viên bi và thành băng cao su (`cushion`) từ xung lượng 3D nhất quán:
-  /// - Xung lượng pháp tuyến `J_n = m * (1 + e_bc) * v_n_in` cho `v_n_out = e_bc * v_n_in`.
-  /// - Xung lượng ma sát tiếp tuyến ngang `J_t` giới hạn bởi Coulomb `|J_t| <= mu_bc * J_n` và ngưỡng không đảo chiều trượt `|J_t| <= (2/7) * m * |v_t - R * wz|`,
+  /// Giải va chạm giữa viên bi và thành băng cao su (`cushion`) theo:
+  /// **Mô hình Băng Rút Gọn 2.5D Tiêu Tán Năng Lượng (Planar Dissipative Cushion Model)**:
+  /// - Xung lượng pháp tuyến Newton: `J_n = m * (1 + e_bc) * v_n_in` cho `v_n_out = e_bc * v_n_in`.
+  /// - Xung lượng ma sát tiếp tuyến ngang Coulomb: `|J_t| <= mu_bc * J_n` và ngưỡng bám trượt `|J_t| <= (2/7) * m * |v_t - R * wz|`,
   ///   cập nhật đồng thời `v_t_out = v_t_in + J_t / m` và `wz_out = wz - (5 / (2 m R)) * J_t`.
-  /// - Ma sát mặt mũi băng ở độ cao `cushionContactHeightRatio` cản trở thành phần xoáy ngang dọc trục băng `omega_t = omega_xy . t`
-  ///   với xung lượng `|J_k| <= mu_bc * (1 + noseHeightOffsetRatio) * J_n`, làm giảm `|omega_t|` về 0 mà không bao giờ tự sinh spin khi `omega_xy == 0` hoặc `mu_bc == 0`.
+  /// - Thành phần xoáy ngang dọc trục băng `omega_t = omega_xy . t` (cu-lê / trô chạm mặt cao su)
+  ///   chịu mô-men cản ma sát thuần túy (spin damping), giảm dần về 0 mà không bao giờ tự sinh spin khi `omega_xy == 0` hoặc `mu_bc == 0`.
+  /// - Giới hạn vật lý công bố: Mô hình là hệ 2.5D phẳng có tiêu tán; không giải động học nảy tự do theo trục Z (3D bounce)
+  ///   và chưa dùng để nghiệm thu các cú đánh phụ thuộc mạnh vào cu-lê/trô đập băng ở tốc độ cao (như Massé vào băng).
   ///
   /// Định lý bảo toàn / tiêu hao năng lượng:
   /// Với mọi `0 <= e_bc <= 1`, mọi `mu_bc >= 0`, mọi vận tốc tới `v` và mọi spin 3D `omega`:

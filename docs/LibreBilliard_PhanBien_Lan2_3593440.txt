@@ -1,0 +1,142 @@
+LIBREBILLIARD — PHẢN BIỆN LẦN 2 VÀ LỆNH SỬA TIẾP CHO GEMINI
+Ngày: 11/11/2026
+Repo: https://github.com/letrieubavuong/LibreBilliard
+Commit mới đã kiểm tra: 359344053a40dd1bdc47148a5f24bd5a7d2bd89b (main).
+Đối chiếu với mốc lần trước: 7a8fe98939619f89da1dea893403edecab297ffe. Bản mới có thêm 4 commit theo compare API.
+
+KẾT LUẬN
+Đã có tiến bộ lớn về kiến trúc: engine Dart độc lập Flutter, đơn vị SI, spin 3D/quaternion, va chạm có sự kiện, ma sát vải tách trượt/lăn, kết quả chung cho đánh giá/hiển thị, cache, ngắm hình học, truyền lực/mũi cơ từ màn tạo hình, lưu JSON sổ tay.
+Chưa đủ điều kiện nghiệm thu “mô phỏng billiard chính xác”. Có hai phản ví dụ tự sinh năng lượng; dữ liệu bài học và lực hiển thị còn mâu thuẫn với đầu vào engine; bộ test hiện tại chưa kiểm chứng hết phạm vi báo cáo.
+
+PHẠM VI KIỂM CHỨNG
+- Đọc mã ở đúng SHA nêu trên, gồm toàn bộ lib/physics, adapter, các phần UI tích hợp, dữ liệu bài học, persistence và test mới; đối chiếu báo cáo docs/PHYSICS_ENGINE_REPORT.md.
+- Đã tính lại bằng Python các biểu thức số trong cue_strike.dart, collisions.dart và hình học đầu vào KT-01. Đây là phản ví dụ số của chính công thức trong mã, không phải kết quả chạy Dart/Flutter.
+- Không có Flutter/Dart trong môi trường review, nên chưa chạy flutter analyze/test, chưa cài APK, chưa đo hiệu năng trên thiết bị.
+- GitHub Actions API tại thời điểm kiểm tra trả 0 workflow runs; Releases API trả danh sách rỗng. Không thấy APK trong cây file đã kiểm tra. Điều này không chứng minh tác giả chưa từng test/build ở máy riêng; cần cung cấp log và bản build để đối chiếu.
+
+1. P0 — CƠ–BI CÓ THỂ TẠO NĂNG LƯỢNG LỚN HƠN NĂNG LƯỢNG CƠ BAN ĐẦU
+Nguồn: lib/physics/cue_strike.dart:40–45; đối chiếu công thức tài liệu ngay đầu file:11.
+Mã đang dùng inertiaFactor = 1 + 0.35*(xTip²+zTip²)/R². Công thức mô hình nêu ở comment dùng hệ số 5/2, không phải 0.35.
+
+Phản ví dụ thuộc miền đầu vào hợp lệ của app:
+  m = 0.210 kg; Mc = 0.520 kg; R = 0.03075 m;
+  tipRestitution = 0.72; cueSpeed = 1.0 m/s;
+  tipOffsetRatio = (0, 0.8); cueElevation = 0.
+Theo biểu thức đang chạy:
+  v_bi = 1.05661090634 m/s;
+  E_bi = 1/2*m*v² + 1/2*I*|omega|² = 0.30478446382 J;
+  E_cơ trước chạm = 1/2*Mc*cueSpeed² = 0.26000000000 J.
+Riêng bi đã có năng lượng lớn hơn nguồn 17.22%, chưa tính động năng còn lại của cơ. Với lệch 0.75R cũng vượt khoảng 12.20%.
+
+Yêu cầu: suy ra lại mô hình J và omega từ cùng hình học tiếp xúc và khối lượng hiệu dụng; bỏ hệ số 0.35 không có dẫn xuất. Với góc nâng, tính nhất quán r×J và mẫu số khối lượng hiệu dụng, hoặc giới hạn rõ miền hỗ trợ. Thêm test tổng năng lượng cơ+bi trước/sau với e<=1 trên nhiều điểm mũi cơ. Không chỉ thay một số để khớp bài mẫu.
+
+2. P0 — BI–BĂNG TỰ SINH SPIN VÀ CÓ THỂ TĂNG TỔNG ĐỘNG NĂNG
+Nguồn: lib/physics/collisions.dart:320–340.
+Sau khi tính xung lượng, mã cộng normalRollBoost theo 0.12 và thay omega_xy bằng 35% omega cũ + 65% xoáy lăn tương ứng vận tốc mới. Hai phép này chưa được suy ra từ xung lượng tại điểm tiếp xúc. cushionContactHeightRatio có khai báo trong TableConfig nhưng không tham gia solver.
+
+Phản ví dụ dùng cấu hình băng MẶC ĐỊNH:
+  Chạm CushionId.shortNear: n=(1,0), t=(0,1).
+  Bi ở x=R, xa góc và các bi khác;
+  v=(-0.01, 1.0) m/s; omega=(0,0,0).
+  m=0.210; R=0.03075; e_bc=0.80; mu_bc=0.18.
+Tính đúng các biểu thức trong hàm hiện tại:
+  v_ra=(0.008, 0.99676) m/s;
+  omega_ra≈(-21.06972358, 0.16910569, 0.26341463) rad/s;
+  E_trước=0.1050105 J;
+  E_sau=0.12196151223 J; tăng 16.14% trên băng thụ động.
+
+Phản ví dụ kiểm thử lí tưởng còn rõ hơn:
+  e_bc=1, mu_bc=0, v=(-1,0), omega=0.
+Hàm vẫn tự tạo omega_y=0.65/R, làm tổng động năng tăng 16.9%. Theo mô hình tường nhẵn tiếp xúc ngang tâm mà hàm đang dùng, omega phải giữ nguyên.
+
+Yêu cầu: bỏ boost/blend thủ công; giải vận tốc và spin từ cùng xung lượng, mômen quán tính và vị trí điểm tiếp xúc. Nếu dùng mũi băng cao hơn tâm, phải đưa chiều cao vào hình học/mômen, không giữ nguyên các giả định ngang tâm rồi thêm hệ số. Test tổng động năng trên sweep góc tới, tốc độ và spin, gồm hai phản ví dụ trên.
+
+3. P1 — LỰC HIỂN THỊ KHÔNG CÒN ĐƠN ĐIỆU TRONG BÀI HỌC
+Nguồn: lib/data/sample_lessons.dart:43–45; lib/models/carom_physics_solver.dart:164–166; lib/physics/shot_input.dart:65–68.
+KT-01 hiển thị speedLevel=2 nhưng customCueSpeed=5.06 m/s. Khi người dùng tăng lực lên level=3, adapter bỏ custom speed và dùng 2.55 m/s. Kết quả: tăng lực từ 2 lên 3 làm tốc độ cơ giảm gần 49.60%.
+Test speedLevel hiện chỉ kiểm bảng ShotInput và các cú độc lập; không đi qua nhánh override của lesson nên không phát hiện lỗi này.
+
+Yêu cầu: một ánh xạ lực thống nhất; nếu cần calibration thì áp dụng hệ số/tốc độ tham chiếu liên tục, công khai và đơn điệu ở cả 5 mức. Hiển thị tốc độ thật khi có custom speed. Test qua evaluateAdjustedShot cho từng bài ở level 1..5 và chiều ngược lại.
+
+4. P1 — BÀI TRÔ NGẮN KT-01 KHÔNG NGẮM ĐÚNG ĐỘ DÀY ĐƯỢC HƯỚNG DẪN
+Nguồn: lib/data/sample_lessons.dart:22–24,31–45,47–52; adapter ưu tiên explicitAimAngleRadians trong carom_physics_solver.dart:89–95.
+Bài hướng dẫn chạm 3/4 má trái vào bi vàng, nhưng góc ngắm bị override thành -3.51703 rad.
+  Cue=(2.25,1.45) diamond; vàng=(1.52,1.12) diamond;
+  hướng đầu=(cos a,sin a)≈(-0.93034734,0.36667945).
+  Khoảng cách vuông góc từ tâm vàng đến tia đầu≈0.20401517 m.
+  Đường kính hai bi cho điều kiện tiếp xúc=2R=0.0615 m.
+Do đó tia đầu không thể chạm bi vàng. Cú carom nếu xảy ra sau đó phải nhờ đổi hướng qua băng/va chạm khác, không phải cú chạm vàng trực tiếp như nội dung bài. Engine hiện không mô phỏng squirt ở góc nâng 0 để giải thích sai khác này.
+
+Test bài mẫu chỉ yêu cầu cuối cùng cue chạm đủ hai bi, chưa xác nhận thứ tự va chạm, độ dày chạm thực, số băng và khoảng kéo đúng nội dung.
+Yêu cầu: không tìm một góc bất kỳ ăn điểm để gắn lại cho bài. Tính và hiển thị fraction thực của cú ngắm tự do; nếu bài đặt fraction thì engine phải lấy hướng tương ứng, hoặc hiển thị rõ chế độ override và bỏ nhãn fraction không đúng. Chuyển bài nào chưa khớp thành “chưa kiểm chứng”; test đặc trưng từng kỹ thuật thay vì chỉ hitsSecondBall.
+
+5. P1 — ENGINE VẪN ÂM THẦM ĐỔI THẾ BI ĐẦU VÀO
+Nguồn: lib/physics/carom_engine.dart:35–46 và 447–479.
+_sanitizeInitialPositions kẹp biên rồi đẩy các bi tách nhau trong 4 vòng; không trả validation error/cảnh báo hay đồng bộ vị trí sửa về trạng thái editor. Vì vậy user có thể nhìn/lưu một thế nhưng engine chạy thế đã bị đổi, kể cả khi ngắm được tính trước khi sanitization.
+
+Yêu cầu: validate input rõ ràng; từ chối thế chồng lấp/quá biên đáng kể. Nếu có hành động sửa thế bi thì làm tường minh trong editor rồi tính lại hướng ngắm. Chỉ cho phép numerical slop rất nhỏ trong solver và ghi rõ dung sai. Thêm kiểm thử cụm bi sát băng/góc; không coi 4 vòng là bằng chứng luôn hết chồng lấp.
+
+6. P1 — SỔ TAY CÓ LƯU FILE NHƯNG VẪN CÓ THỂ BÁO LƯU THÀNH CÔNG KHI THẤT BẠI
+Nguồn: lib/data/notebook_storage.dart:121–147,176–188; lib/screens/home_screen.dart:74–83,150–162; lib/screens/lesson_detail_screen.dart:412–418.
+saveState trả bool nhưng HomeScreen bỏ kết quả; callback ghi chú là void; UI vẫn thông báo đã lưu. Đường lưu hardcode package Android và fallback Directory.systemTemp chưa phải storage bền vững đa nền tảng. loadState nuốt lỗi JSON/I/O và trả mặc định; lần ghi tiếp có thể ghi đè dữ liệu hỏng mà không giữ bản phục hồi. schemaVersion mới hơn cũng chưa bị từ chối/migration rõ ràng.
+
+Yêu cầu: dùng thư mục dữ liệu ứng dụng do nền tảng cung cấp, không dùng thư mục tạm cho dữ liệu người dùng. Truyền kết quả ghi/lỗi tới UI và chỉ báo đã lưu khi thành công. Giữ bản lỗi để phục hồi trước khi thay, xử lí version tương lai rõ ràng. Test lỗi đường dẫn/quyền ghi, đọc lại sau khởi động và mở lại custom lesson đủ thông số.
+
+7. P1 — KHUNG HIỂN THỊ VẪN DÙNG SCALE HAI TRỤC KHÁC NHAU
+Nguồn: lib/widgets/diagrams/carom_table_diagram.dart:161–173,228–230,1284–1285.
+Tâm bi được chiếu theo playRect.height/maxLongUnits và playRect.width/4, nhưng bán kính chỉ dùng chiều rộng. AspectRatio bên ngoài chưa bảo đảm tỉ lệ vùng lòng bàn sau khi trừ băng. Ở cận cảnh, ví dụ canvas 340×400 px, băng trái/phải/trên 20 px, dưới 9 px: scale dọc=371/4.5≈82.44 px/diamond, ngang=300/4=75 px/diamond. Tâm cách 2R theo chiều dọc sẽ hiện có khe hở khoảng 9.93% đường kính mặc dù engine đang tiếp xúc.
+
+Yêu cầu: một hệ số pixelsPerMeter duy nhất cho cả tâm, bán kính, vùng gom và đường ngắm; căn giữa/letterbox nếu cần. Viewport cận cảnh chỉ crop/zoom. Test visual contact theo nhiều hướng và round-trip world↔canvas.
+
+8. P2 — NHÃN PHÁT 1× CHƯA ĐẠI DIỆN THỜI GIAN VẬT LÍ THẬT
+Nguồn: carom_table_diagram.dart:381–400,1157–1159,1188–1192.
+Mọi cú đánh vẫn nén vào controller 2600 ms (5200 ms chậm), trong khi simTime chạy hết durationSeconds. Cú 2 giây và 14 giây đều phát trong 2.6 giây. Điều này không đổi quỹ đạo nhưng làm sai cảm nhận tốc độ khi dùng để dạy lực.
+Yêu cầu: nếu gọi 1× thì đồng bộ giây phát với giây vật lí, tách thời gian chuẩn bị cơ; hoặc ghi rõ đang phát bản tua nhanh với hệ số thực. Slow motion chỉ nhân thời gian phát, không đổi engine.
+
+9. P1 — “16/16 PASS” KHÔNG ĐỒNG NGHĨA PHỦ ĐỦ YÊU CẦU LẦN TRƯỚC
+Nguồn: test/physics_engine_test.dart và docs/PHYSICS_ENGINE_REPORT.md.
+- Test 1 dòng 21–45 chỉ xét tốc độ tâm giảm, không tính tổng động năng tịnh tiến+quay, không bao phủ xung lượng cơ hoặc ca băng xiên nêu trên.
+- Test 6 dòng 214–236 chỉ kiểm snapshots của một cú, chưa lấy mẫu trạng thái giữa snapshot hoặc kiểm tra hội tụ theo timeStep.
+- Test 10 dòng 340–374 chỉ buộc bài mẫu ăn carom, chưa kiểm độ dày thực, quãng kéo, số băng và gom đúng bài.
+- Test 13 dòng 443–464 chỉ kéo vùng trống và kiểm chuỗi chữ tọa độ, chưa thực hiện kéo bi chồng nhau dù tên test nêu cả hai.
+- Test 15 dòng 525–566 kiểm cache hai lần cùng input, rồi bấm lật/số và kiểm screen còn tồn tại; không đếm số lần engine được gọi hoặc đối chiếu tọa độ hiển thị/va chạm.
+- Test 16 dòng 568–596 chuyển tab nhưng chưa mở chi tiết bài dù tên test ghi có.
+- Chưa thấy test định lượng cho ba bi gom đủ, result hết thời gian, tính hội tụ và lỗi ghi storage như yêu cầu cũ.
+- Báo cáo vẫn ghi max tip 0.75R trong khi model/config hiện dùng 0.80R; chưa mô tả hệ số 0.35 cơ–bi và boost/blend băng đang chạy.
+
+Yêu cầu: sửa tên/phạm vi từng test đúng assertion; bổ sung regression thật và báo cáo log chạy. Không kết luận “loại bỏ hoàn toàn” các heuristic hoặc “bảo toàn năng lượng” khi code hiện tại còn phản ví dụ.
+
+LƯU Ý VỀ CCD VÀ PHẠM VI MÔ HÌNH
+findBallBallImpactTime dùng vận tốc không đổi trong bước, còn advanceBallOnCloth tích phân có gia tốc. Hai phần chưa cùng phương trình quỹ đạo nên thời điểm event có sai số; cần kiểm khoảng cách ở event và kiểm hội tụ, nhất là near-grazing và gần chuyển pha. Giảm bước xuống 1ms không tự chứng minh chính xác tuyệt đối.
+Bi–bi hiện chỉ dùng tiếp tuyến nằm trên mặt bàn và cập nhật omega_z. Đây có thể là mô hình rút gọn, nhưng chưa phải giải đầy đủ mọi thành phần ma sát tiếp xúc 3D. Cần công bố giới hạn khi đánh giá các cú nâng cơ/masse.
+
+LỆNH SỬA TIẾP CHO GEMINI — CÓ THỂ SAO CHÉP NGUYÊN KHỐI
+
+Bạn tiếp tục sửa LibreBilliard trên branch riêng từ HEAD, đối chiếu bản review tại 359344053a40dd1bdc47148a5f24bd5a7d2bd89b. Giữ engine/model/UI mới, sửa các sai sót còn lại theo thứ tự dưới đây. Không viết lại từ đầu hoặc chỉnh bài mẫu để che lỗi engine.
+
+Mốc 1 — Chặn sinh năng lượng:
+1. Viết regression cho cue strike ở tip=(0,0.8), cueSpeed=1 và ca băng mặc định v=(-0.01,1), omega=0 tại shortNear. Thêm ca băng lí tưởng e=1,mu=0,v=(-1,0),omega=0.
+2. Suy ra lại J cơ–bi đúng khối lượng hiệu dụng và mômen quán tính; đồng bộ code/comment/report. Với e<=1, tổng năng lượng sau không vượt nguồn ban đầu.
+3. Thay normalRollBoost và blend 0.35/0.65 bằng mô hình xung lượng băng nhất quán. Dùng cushionContactHeightRatio thật nếu chọn mô hình mũi băng cao; công bố miền áp dụng. Test sweep tổng động năng và đối xứng.
+4. Kiểm tra thời điểm CCD khớp phương trình tiến trạng thái, sai số khoảng cách ở event và hội tụ khi giảm timeStep. Không dùng position correction để che lỗi lớn.
+
+Mốc 2 — Đầu vào và bài học trung thực:
+5. Sửa override customCueSpeed để tăng lực 1→5 luôn tăng tốc độ thật qua adapter cho từng bài. KT-01 không được level2=5.06 rồi level3=2.55. UI hiển thị số tốc độ thực nếu có calibration.
+6. Kiểm tra KT-01: góc -3.51703 hiện không hướng trực tiếp vào bi vàng. Bỏ override mâu thuẫn với hướng dẫn 3/4 má trái, hoặc chỉnh cả bài theo cú đã kiểm chứng và gắn nhãn rõ. Test thứ tự va chạm, fraction thực, quãng kéo, số băng, vị trí cuối và vùng gom tương ứng từng bài. Chưa khớp thì ghi chưa kiểm chứng, không ép hitsSecondBall cho đủ 13 bài.
+7. Ngắm tự do phải có fraction thực suy ra hoặc ẩn nhãn fraction preset không còn dùng. Input không hợp lệ trả validation error; không âm thầm đổi thế bi trong engine rồi giữ UI cũ.
+
+Mốc 3 — Hoàn thiện hiển thị và lưu:
+8. World↔canvas dùng một scale đồng nhất; kiểm tiếp xúc hai bi vẫn sát nhau ở mọi hướng khi zoom/cận cảnh.
+9. Đồng bộ thời gian phát 1× với giây vật lí hoặc ghi đúng hệ số tua nhanh. Slow chỉ đổi playback.
+10. Sổ tay dùng thư mục app chuẩn; truyền bool/error save lên UI, kiểm tra lỗi ghi, giữ bản JSON lỗi để phục hồi. Không lưu dữ liệu người dùng vào temp fallback.
+
+Mốc 4 — Nghiệm thu có bằng chứng:
+11. Bổ sung các test thiếu, đặc biệt tổng năng lượng tại strike/băng, tăng lực qua lesson adapter, đúng kỹ thuật bài học, gom đủ ba bi, maxTimeReached, trạng thái phát giữa snapshot, hội tụ, lỗi lưu và khởi động lại.
+12. Cập nhật docs/PHYSICS_ENGINE_REPORT.md theo đúng mã đang chạy; thay tuyên bố chung “16/16” bằng bảng ca cụ thể, đầu vào, kết quả đo, dung sai, phạm vi và log. Không gọi test chuyển tab là test mở chi tiết nếu không mở.
+13. Chạy flutter analyze, flutter test, build APK; cung cấp log thật, SHA, APK, checksum và video các cú kiểm thử. Không có môi trường hoặc fail thì ghi đúng trạng thái, không điền PASS.
+14. Commit riêng từng mốc, không force-push, không xóa dữ liệu sổ tay; bàn giao cách revert/migration. Chỉ tuyên bố nghiệm thu trong phạm vi mô hình đã đo/đối chiếu.
+
+Nguồn tham khảo để đối chiếu mô hình và giới hạn:
+https://ekiefl.github.io/2020/04/24/pooltool-theory/
+https://pooltool.readthedocs.io/en/latest/autoapi/pooltool/physics/index.html
+Ưu tiên các phép kiểm chứng độc lập với chính implementation; khớp test tự viết chưa thay thế đối chiếu thực nghiệm bàn carom.

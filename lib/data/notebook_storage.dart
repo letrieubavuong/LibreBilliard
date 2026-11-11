@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import '../models/billiard_lesson.dart';
 
 /// Snapshot dữ liệu Sổ tay cá nhân được lưu bền cục bộ (kèm kiểm soát `schemaVersion`).
@@ -12,6 +13,8 @@ class NotebookPersistedState {
   final Map<String, String> personalNotes;
   final List<BilliardLesson> customLessons;
   final int customLessonCounter;
+  final bool isReadOnly;
+  final String? readOnlyReason;
 
   const NotebookPersistedState({
     this.schemaVersion = currentSchemaVersion,
@@ -20,6 +23,8 @@ class NotebookPersistedState {
     required this.personalNotes,
     required this.customLessons,
     required this.customLessonCounter,
+    this.isReadOnly = false,
+    this.readOnlyReason,
   });
 
   factory NotebookPersistedState.initialDefaults() {
@@ -37,6 +42,7 @@ class NotebookPersistedState {
       },
       customLessons: [],
       customLessonCounter: 1,
+      isReadOnly: false,
     );
   }
 
@@ -49,7 +55,11 @@ class NotebookPersistedState {
         'customLessonCounter': customLessonCounter,
       };
 
-  factory NotebookPersistedState.fromJson(Map<String, dynamic> json) {
+  factory NotebookPersistedState.fromJson(
+    Map<String, dynamic> json, {
+    bool isReadOnly = false,
+    String? readOnlyReason,
+  }) {
     final version = (json['schemaVersion'] as num?)?.toInt() ?? 1;
     if (version < 1) {
       return NotebookPersistedState.initialDefaults();
@@ -107,6 +117,8 @@ class NotebookPersistedState {
       personalNotes: notes,
       customLessons: customList,
       customLessonCounter: counter,
+      isReadOnly: isReadOnly,
+      readOnlyReason: readOnlyReason,
     );
   }
 }
@@ -117,6 +129,18 @@ class NotebookStorage {
   final File? overrideFile;
 
   const NotebookStorage({this.overrideFile});
+
+  /// Lấy file lưu trữ theo thư mục ứng dụng chính thức của nền tảng (asynchronous),
+  /// có fallback tự động đồng bộ khi chạy trong môi trường test/CLI.
+  Future<File> resolveStorageFile() async {
+    if (overrideFile != null) return overrideFile!;
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      return File('${appDir.path}${Platform.pathSeparator}notebook_state_v1.json');
+    } catch (_) {
+      return _resolveStorageFileSync();
+    }
+  }
 
   File _resolveStorageFileSync() {
     if (overrideFile != null) return overrideFile!;
@@ -170,10 +194,10 @@ class NotebookStorage {
   }
 
   /// Đọc dữ liệu Sổ tay đã lưu; nếu file hỏng (JSON parse error) thì backup thành `.corrupted.bak`
-  /// trước khi trả về mặc định; nếu file có schemaVersion tương lai thì không ghi đè.
+  /// trước khi trả về mặc định; nếu file có schemaVersion tương lai thì không ghi đè và chuyển chế độ Read-Only.
   Future<NotebookPersistedState> loadState() async {
     try {
-      final file = _resolveStorageFileSync();
+      final file = await resolveStorageFile();
       if (!file.existsSync()) {
         return NotebookPersistedState.initialDefaults();
       }
@@ -201,12 +225,18 @@ class NotebookStorage {
 
         final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
         if (version > NotebookPersistedState.currentSchemaVersion) {
-          // Phiên bản dữ liệu mới hơn ứng dụng hiện tại -> bảo lưu file, không ghi đè hạ cấp
+          // Phiên bản dữ liệu mới hơn ứng dụng hiện tại -> bảo lưu file, tạo bản sao backup và chuyển Read-Only
           try {
             final futureBak = File('${file.path}.future_v$version.bak');
             futureBak.writeAsStringSync(rawContent, flush: true);
           } catch (_) {}
-          return NotebookPersistedState.fromJson(map);
+          return NotebookPersistedState.fromJson(
+            map,
+            isReadOnly: true,
+            readOnlyReason:
+                'Dữ liệu được tạo bởi phiên bản LibreBilliard mới hơn (schema v$version). '
+                'Ứng dụng đang ở chế độ chỉ đọc để tránh làm mất các trường dữ liệu mới.',
+          );
         }
 
         return NotebookPersistedState.fromJson(map);
@@ -219,9 +249,34 @@ class NotebookStorage {
   }
 
   /// Lưu dữ liệu Sổ tay xuống bộ nhớ cục bộ một cách nguyên tử (atomic temp write).
+  /// Có Write Guard chặn tuyệt đối ghi đè hạ cấp file có schemaVersion tương lai.
   Future<bool> saveState(NotebookPersistedState state) async {
     try {
-      final file = _resolveStorageFileSync();
+      // Write Guard 1: Trạng thái hiện tại đang ở chế độ Read-Only do schema tương lai
+      if (state.isReadOnly) {
+        return false;
+      }
+
+      final file = await resolveStorageFile();
+
+      // Write Guard 2: Kiểm tra file hiện có trên đĩa; nếu có schemaVersion tương lai thì từ chối ghi đè
+      if (file.existsSync()) {
+        try {
+          final diskRaw = file.readAsStringSync();
+          if (diskRaw.trim().isNotEmpty) {
+            final diskDecoded = jsonDecode(diskRaw);
+            if (diskDecoded is Map) {
+              final diskVersion =
+                  (diskDecoded['schemaVersion'] as num?)?.toInt() ?? 1;
+              if (diskVersion > NotebookPersistedState.currentSchemaVersion) {
+                // Từ chối ghi đè hạ cấp, giữ nguyên byte file chính
+                return false;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (!file.parent.existsSync()) {
         file.parent.createSync(recursive: true);
       }
