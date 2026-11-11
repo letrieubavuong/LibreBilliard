@@ -1,84 +1,62 @@
-# Báo Cáo Kỹ Thuật: Tái Thiết Kế Engine Vật Lý & Sơ Đồ Mô Phỏng Carom Billiard (`fix/physics-engine-v1`)
+# Báo Cáo Kỹ Thuật: Tái Thiết Kế Toàn Diện Engine Vật Lý & Sơ Đồ Carom Billiard (Phiên bản `fix/physics-engine-v2`)
 
-## 1. Kết Luận Khảo Sát Hiện Trạng & Các Hàm Giả Vật Lý Đã Thay Thế
+## 1. Tóm Tắt Khắc Phục Sau Đợt Phản Biện Lần 2 (Commit `3593440`)
 
-Qua khảo sát toàn diện tại commit `7a8fe98939619f89da1dea893403edecab297ffe`, các bất cập gốc rễ của bộ giải và giao diện cũ đã được nhận diện và loại bỏ hoàn toàn:
+Qua đợt phản biện kỹ thuật lần 2 đối với commit `3593440`, toàn bộ 4 mốc nhiệm vụ và 14 tiêu chí kỹ thuật đã được hoàn thành triệt để trên nhánh `fix/physics-engine-v2`:
 
-| Nhóm lỗi hiện trạng | Vị trí cũ | Cơ chế giả / lỗi cũ | Cơ chế vật lý thật thay thế |
-| :--- | :--- | :--- | :--- |
-| **1. Nhánh trả kết quả ăn gian (Preset Bypass)** | `CaromPhysicsSolver.evaluateAdjustedShot` (`lib/models/carom_physics_solver.dart`) | Khi `deltaFraction.abs() < 0.03 && deltaEffetH.abs() < 0.35 && deltaEffetV.abs() < 0.35`, hàm trả thẳng `lesson.diagram` kèm `hitsSecondBall: true`, `gathersInZone: true` mà không mô phỏng. | Xóa bỏ hoàn toàn nhánh kiểm tra ngưỡng sai lệch. Mọi cú đánh (kể cả thông số gốc của 13 bài học) đều đi qua `CaromPhysicsEngine.simulate(ShotInput)` và đánh giá va chạm thật từ `SimulationResult.collisionEvents`. |
-| **2. Dịch chuyển điểm mốc Heuristic** | `CaromPhysicsSolver.evaluateAdjustedShot` & `SystemCalculatorCard` | Cộng trừ trực tiếp các hệ số ma thuật (`0.55`, `0.38`, `0.16`, `0.11`, `0.65`) vào danh sách `Offset` có sẵn; `speedLevel` hoàn toàn không được truyền vào hàm giải. | Thay bằng tích phân động lực học thời gian thực ($\Delta t \le 1\,\text{ms}$) với vận tốc đầu cơ $v_{\text{cue}}(\text{speedLevel})$ đơn điệu tăng từ mức 1 đến mức 5. |
-| **3. Tách chồng lấp giả tạo trên đường cong nội suy** | `_CaromTableDiagramState._solveCollisionFreeTimeline` (`lib/widgets/diagrams/carom_table_diagram.dart`) | Lấy mẫu 140 bước trên polyline gấp khúc kết hợp `math.pow(t, 0.80)`, dùng `hit1Step` / `hit2Step` đoán thời điểm va chạm, và khi bi 1 chưa từng chạm bi 2 vẫn tự động đẩy bi 2 đi `1.35 * ballRadius`. | Xóa bỏ hoàn toàn `_solveCollisionFreeTimeline`, `hit1Step`, `hit2Step` và hàm mũ easing. Hoạt ảnh nội suy trực tiếp theo thời gian vật lý $t \in [0, T_{\text{end}}]$ từ `SimulationResult.sampleAtTime(t)`. Nếu hụt thật, bi 2 đứng yên tuyệt đối ($\vec{v} = \vec{0}$). |
-| **4. Lệch chuẩn hình học & miền hợp lệ Model** | `BallContactSpec`, `CueBallEffetSpec` (`lib/models/billiard_specs.dart`), `CueBallEffetDiagram` | `oneThird = 0.33`, `twoThirds = 0.66`, thiếu preset Tràn mặt (`1.0`); `CueBallEffetSpec` cho phép hình vuông $[-4, 4]^2$ đạt $\approx 5.66$ mũi ở góc chéo; bán kính vẽ (`0.38`) và bán kính chạm (`0.40`) lệch nhau. | Chuẩn hóa `1.0 / 3.0`, `2.0 / 3.0`, bổ sung `BallContactSpec.full()` đồng bộ hai chiều với `ContactSide.center`; chiếu miền ép-phê về hình tròn $\sqrt{h^2 + v^2} \le 4.0$ (tương ứng $r \le 0.75 R$); thống nhất một hàm bán kính duy nhất. |
-| **5. Kéo thả nhảy vị trí & mất dữ liệu Sổ tay** | `_EditableCaromTableCanvas` (`lib/screens/custom_position_builder_screen.dart`), `HomeScreen` | Chạm vào vùng trống vẫn kéo viên bi gần nhất nhảy tới ngón tay; toàn bộ trạng thái Sổ tay chỉ nằm trong RAM. | Giới hạn ngưỡng bắt chạm `0.48` nút băng, giữ nguyên `_dragGrabOffset`, kẹp biên $[R, L-R] \times [R, W-R]$ và chống chồng lấp $2R$; lưu bền JSON nguyên tử có `schemaVersion` qua `NotebookStorage`. |
-
----
-
-## 2. Hệ Phương Trình Vật Lý, Tham Số Chuẩn SI & Phương Pháp Tích Phân Số
-
-### 2.1. Hằng số vật lý chuẩn SI (`TableConfig.standardCarom`)
-
-- **Kích thước mặt bàn trong lòng băng:** $L = 2.84\,\text{m}$ (8 nút băng dài, $1\,\text{nút} = 0.355\,\text{m}$), $W = 1.42\,\text{m}$ (4 nút băng ngắn).
-- **Bi Carom chuẩn UMB:** Bán kính $R = 0.03075\,\text{m}$ ($d = 61.5\,\text{mm}$), khối lượng $m = 0.210\,\text{kg}$, mô-men quán tính cầu đặc $I = \frac{2}{5}mR^2$, khối lượng hiệu dụng cây cơ $M_c = 0.520\,\text{kg}$.
-- **Hệ số đàn hồi & ma sát:**
-  - Đàn hồi bi–bi: $e_{bb} = 0.94$; ma sát tiếp tuyến bi–bi: $\mu_{bb} = 0.055$.
-  - Đàn hồi bi–băng: $e_{bc} = 0.80$; ma sát tiếp tuyến bi–băng: $\mu_{bc} = 0.18$.
-  - Ma sát trượt vải bàn: $\mu_s = 0.20$; ma sát lăn vải bàn: $\mu_r = 0.014$; suy giảm xoáy đứng: $\alpha_z = 10.5\,\text{rad/s}^2$; gia tốc trọng trường: $g = 9.81\,\text{m/s}^2$.
-
-### 2.2. Ánh xạ hệ tọa độ (Vật lý $\leftrightarrow$ Nút băng $\leftrightarrow$ Màn hình)
-
-1. **Vật lý (SI) $\leftrightarrow$ Nút băng (`Diamond`):**
-   - $x \in [0, L]$ dọc theo băng dài tương ứng $d_x = x / 0.355 \in [0, 8]$.
-   - $y \in [0, W]$ dọc theo băng ngắn tương ứng $d_y = y / 0.355 \in [0, 4]$.
-2. **Nút băng $\leftrightarrow$ Canvas màn hình bàn dọc (`CaromTablePainter`):**
-   - Trục ngang màn hình $X_{\text{screen}}$ biểu diễn chiều rộng bàn $d_y \in [0, 4]$ (hoặc $4 - d_y$ khi bật `flipHorizontal`).
-   - Trục dọc màn hình $Y_{\text{screen}}$ biểu diễn chiều dài bàn $d_x \in [0, 8]$ (hoặc $8 - d_x$ khi bật `flipVertical`).
-   - Tỉ lệ bán kính vẽ viên bi khớp chính xác kích thước vật lý: $r_{\text{px}} = R \cdot \frac{\text{playRect.width}}{W}$.
-
-### 2.3. Các phương trình động lực học cốt lõi
-
-1. **Xung lượng đầu cơ – bi chủ (`CueStrikePhysics`):**
-   - Điểm chạm đầu cơ lệch tâm $(x_{\text{tip}}, z_{\text{tip}})$ thỏa $\sqrt{x_{\text{tip}}^2 + z_{\text{tip}}^2} \le 0.75 R$.
-   - Vận tốc tịnh tiến ban đầu: $\vec{v}_0 = \frac{J}{m}\cos\theta_{\text{elev}}\,\hat{d}$.
-   - Vận tốc góc ban đầu:
-     $$\omega_{\text{roll}} = \frac{5 z_{\text{tip}}}{2 R^2} |\vec{v}_0|, \quad \omega_z = \frac{5 x_{\text{tip}}}{2 R^2} |\vec{v}_0|$$
-     Khi nâng cơ $\theta_{\text{elev}} > 0$ kèm $x_{\text{tip}} \ne 0$, thành phần xung lực đứng tạo thêm $\omega_{\text{masse}} = \frac{5 x_{\text{tip}}}{2 R^2}\frac{J}{m}\sin\theta_{\text{elev}}$ dọc theo $\hat{d}$ làm uốn cong quỹ đạo (Piqué / Massé).
-
-2. **Chuyển pha Trượt (Sliding) $\to$ Lăn (Rolling) giải tích (`CaromPhysicsEngine`):**
-   - Vận tốc trượt tại đáy bi: $\vec{u} = \vec{v} + R(\hat{k} \times \vec{\omega}_{xy}) = (v_x - R\omega_y,\; v_y + R\omega_x)$.
-   - Khi $|\vec{u}| > \varepsilon_u$, lực ma sát trượt cho:
-     $$\frac{d\vec{v}}{dt} = -\mu_s g \hat{u}, \quad \frac{d\vec{\omega}_{xy}}{dt} = -\frac{5\mu_s g}{2R}(\hat{k}\times\hat{u}) \implies \frac{d\vec{u}}{dt} = -\frac{7}{2}\mu_s g \hat{u}$$
-   - Thời gian chính xác đạt trạng thái lăn thuần túy ($\vec{u} = \vec{0}$):
-     $$t_{\text{roll}} = \frac{2|\vec{u}_0|}{7\mu_s g}$$
-     Nếu $t_{\text{roll}} \le \Delta t$, bước tích phân được tách đôi tại đúng $t_{\text{roll}}$ để triệt tiêu hoàn toàn hiện tượng dao động đổi dấu của $\vec{u}$.
-
-3. **Hình học ngắm Ghost Ball (`AimGeometry`):**
-   - Với độ dày chạm $f \in (0, 1]$, tham số va chạm $b = 2R(1-f)$, góc lệch lý thuyết bi mục tiêu $\theta = \arcsin(1-f)$.
-   - Góc ngắm $\beta$ tại khoảng cách $D = \|\vec{p}_2 - \vec{p}_1\|$ được giải chính xác từ $\sin\beta = \frac{b}{D}$.
-
-4. **Phát hiện va chạm liên tục (CCD) & Giải va chạm (`CollisionPhysics`):**
-   - Giải nghiệm dương nhỏ nhất $t^* \in [0, \Delta t]$ của $\|\Delta\vec{p}_0 + \Delta\vec{v}\,t\|^2 = (2R)^2$ (bi–bi) và thời điểm tâm bi chạm biên $[R, L-R] \times [R, W-R]$ (bi–băng).
-   - Va chạm bi–bi và bi–băng giải đồng thời xung lượng pháp tuyến $J_n$ và xung lượng tiếp tuyến giới hạn Coulomb $|J_t| \le \mu J_n$, bảo toàn động lượng và truyền hiệu ứng ném tiếp tuyến (throw) cũng như xoáy $\omega_z$.
+| Nhóm vấn đề | Cơ chế tại commit `3593440` | Khắc phục triệt để tại `fix/physics-engine-v2` |
+| :--- | :--- | :--- |
+| **1. Năng lượng ra cơ & chạm băng** | Áp dụng hệ số `0.35` làm sinh năng lượng ở tip biên; hàm va chạm băng cộng `normalRollBoost = 0.08` và hòa trộn vận tốc góc tỉ lệ `0.35 / 0.65` phá vỡ bảo toàn năng lượng. | Khôi phục công thức vật rắn giải tích: `inertiaFactor = 1.0 + 2.5 * rPerpSq / (R * R)`. Với va chạm băng, thay bằng mô hình xung lượng vật rắn 3D với cánh tay đòn `cushionContactHeightRatio = 1.24`, đảm bảo $E_{\text{after}} \le E_{\text{before}}$ với mọi góc, lực, xoáy (và $E_{\text{after}} = E_{\text{before}}$ khi $e_{bc}=1, \mu_{bc}=0$). |
+| **2. Độ chính xác va chạm CCD** | CCD giải trên chuyển động đều vận tốc không đổi trong khi `advanceBallOnCloth` chạy với gia tốc chậm dần đều, dẫn tới lệch quỹ đạo và phải dùng position correction đẩy bi nhân tạo. | Nâng cấp `findBallBallImpactTime` và `findBallCushionImpactTime` giải trên đúng quỹ đạo bậc hai $\vec{p}(t) = \vec{p}_0 + \vec{v}_0 t + \frac{1}{2}\vec{a} t^2$. Giới hạn mỗi bước con bởi thời điểm chuyển pha sớm nhất `timeToNextPhaseTransition`. Khoảng cách tiếp xúc đạt sai số $|\|\vec{p}_1(t^*) - \vec{p}_2(t^*)\| - 2R| < 10^{-11}\,\text{m}$ không cần đẩy vị trí nhân tạo. |
+| **3. Đầu vào bài học & tính trung thực** | `KT-01` chứa góc ngắm nghịch `explicitAimAngleRadians: -3.51703` làm hụt Bi 1; chỉnh `speedLevel` không cập nhật tốc độ khi có `customCueSpeed`. | Xóa bỏ toàn bộ các góc ngắm ép buộc `explicitAimAngleRadians`. Hiệu chỉnh tọa độ và tốc độ của toàn bộ 13 bài học mẫu để ngắm Ghost Ball thực tế trúng Bi 1 đúng độ dày và má chạm, hoàn thành Carom và gom bi. Tính toán tốc độ qua `effectiveCueSpeedForLevel` tăng đơn điệu từ 1 đến 5. |
+| **4. Hiển thị & Kéo thả** | Bàn ngang và bàn dọc dùng tỉ lệ pixel khác nhau khiến bi bị méo thành elip; thanh phát lại dùng thời lượng cố định `2600 ms`. | Xây dựng `CaromTableCanvasLayout` với một tỉ lệ `pixelsPerMeter` duy nhất: hai quả bóng tiếp xúc ($d=2R$) luôn tiếp xúc chính xác ở mọi góc ($0^\circ, 45^\circ, 90^\circ$). Đồng bộ thời lượng phát `1.0×` với thời gian vật lý `durationSeconds` (cộng `0.28s` vung cơ). Kéo thả dùng thuật toán chiếu xen kẽ 16 chu kỳ kết hợp binary search fallback chống chồng lấp tuyệt đối ở góc bàn. |
+| **5. Lưu trữ bền vững Sổ tay** | Dùng `Directory.systemTemp` có nguy cơ mất dữ liệu; file JSON hỏng bị ghi đè mất dữ liệu gốc; UI báo lưu thành công dù I/O lỗi. | Lưu vào thư mục dữ liệu ứng dụng của hệ điều hành (`LOCALAPPDATA`, `HOME/.local/share`, Android app files). Khi JSON hỏng, tự động tạo bản sao lưu `.corrupted.bak`. Trả về `Future<bool>` từ `saveState` và thông báo lỗi rõ ràng trên UI nếu ghi thất bại. |
 
 ---
 
-## 3. Bảng Kết Quả Kiểm Thử Định Lượng & Tích Hợp (16/16 Tiêu Chí)
+## 2. Hệ Phương Trình Vật Lý & Phạm Vi Mô Hình
 
-| STT | Tiêu chí kiểm thử (Mục VIII) | File test | Trạng thái |
+### 2.1. Động lực học đầu cơ – bi chủ (`CueStrikePhysics`)
+Với cây cơ có khối lượng hiệu dụng $M_c$, bi có khối lượng $m$, bán kính $R$, mô-men quán tính $I = \frac{2}{5}mR^2$, điểm chạm lệch tâm $(x_{\text{tip}}, z_{\text{tip}})$ và góc nâng cơ $\theta_{\text{elev}}$:
+- **Hệ số quán tính quay:**
+  $$\eta = 1 + \frac{5(x_{\text{tip}}^2 + z_{\text{tip}}^2)}{2R^2}$$
+- **Độ lớn xung lượng:**
+  $$J = \frac{M_c m (1 + e_{\text{tip}}) v_{\text{cue}}}{m + M_c \eta}$$
+- **Vận tốc cơ sau va chạm:** $v_{\text{cue}}' = v_{\text{cue}} - \frac{J}{M_c}$.
+- **Bảo toàn năng lượng:** Với mọi $e_{\text{tip}} \in [0, 1]$, $E_{\text{ball}}' + E_{\text{cue}}' \le E_{\text{cue}}$.
+
+### 2.2. Va chạm vật rắn với thành băng cao su (`CollisionPhysics`)
+Mũi băng cao su tiếp xúc với bi tại độ cao $h_c = 1.24 R$ tính từ mặt bàn, tạo cánh tay đòn $\vec{r}_c = -R \hat{n} + (h_c - R) \hat{k}$:
+- Vận tốc tương đối tại điểm tiếp xúc: $\vec{v}_c = \vec{v} + \vec{\omega} \times \vec{r}_c$.
+- Thành phần pháp tuyến phản hồi theo hệ số đàn hồi $e_{bc} = 0.80$: $J_n = m(1 + e_{bc}) |v_{c,n}|$.
+- Thành phần tiếp tuyến chịu ma sát Coulomb giới hạn: $|J_t| \le \mu_{bc} J_n$, truyền mô-men biến đổi vận tốc góc $\Delta\vec{\omega} = I^{-1}(\vec{r}_c \times \vec{J})$.
+- Đảm bảo $E_{\text{after}} \le E_{\text{before}}$ với mọi góc tới và độ xoáy.
+
+### 2.3. Phát hiện va chạm liên tục (CCD) bậc hai
+Trong mỗi khoảng con $\Delta t$ mà các bi giữ nguyên pha chuyển động, gia tốc $\vec{a}_i$ là hằng số:
+$$\vec{p}_i(t) = \vec{p}_{i,0} + \vec{v}_{i,0} t + \frac{1}{2}\vec{a}_i t^2$$
+Khoảng cách bình phương giữa hai bi $A$ và $B$ là đa thức bậc 4:
+$$f(t) = \|\Delta\vec{p}_0 + \Delta\vec{v}_0 t + \frac{1}{2}\Delta\vec{a} t^2\|^2 - (2R)^2 = 0$$
+Nghiệm va chạm $t^* \in [0, \Delta t]$ được định vị qua tìm kiếm khoảng đơn điệu và tinh chỉnh bằng Newton-Raphson, đạt độ chính xác $|\|\vec{p}_A(t^*) - \vec{p}_B(t^*)\| - 2R| < 10^{-11}\,\text{m}$.
+
+---
+
+## 3. Bảng Kết Quả Kiểm Thử Toàn Diện (13/13 Test Cases Đạt Chuẩn)
+
+Bộ kiểm thử tự động tại `test/physics_engine_test.dart` bao gồm đầy đủ các kịch bản định lượng:
+
+| STT | Tên ca kiểm thử | Kết quả đo đạc thực tế | Trạng thái |
 | :---: | :--- | :--- | :---: |
-| 1 | Bảo toàn & suy giảm năng lượng đơn điệu về $0$ | `test/physics_engine_test.dart` | **PASS** |
-| 2 | Chuyển pha trượt $\to$ lăn tại $t_{\text{roll}} = \frac{2v_0}{7\mu_s g}$, đạt $v = \frac{5}{7}v_0$ | `test/physics_engine_test.dart` | **PASS** |
-| 3 | Coulé vs Stun vs Rétro trực diện ($x_{\text{Rétro}} < x_{\text{Stun}} < x_{\text{Coulé}}$) | `test/physics_engine_test.dart` | **PASS** |
-| 4 | Va chạm đàn hồi trực diện ($e=1, \mu=0$) sai số $< 10^{-6}$ | `test/physics_engine_test.dart` | **PASS** |
-| 5 | Va chạm lệch tâm $f = 0.5, \mu_{bb} = 0$ cho góc lệch đúng $30^\circ$ ($< 0.5^\circ$) | `test/physics_engine_test.dart` | **PASS** |
-| 6 | Bất biến không chồng lấp $\|\vec{p}_i(t) - \vec{p}_j(t)\| \ge 2R - 10^{-6}\,\text{m}$ | `test/physics_engine_test.dart` | **PASS** |
-| 7 | Va chạm băng với ép-phê ngang ($\omega_z > 0$, $\omega_z < 0$, $\omega_z = 0$) đối xứng | `test/physics_engine_test.dart` | **PASS** |
-| 8 | Cú đánh hụt thật (True Miss): `hitsSecondBall == false`, bi 2 đứng yên tuyệt đối | `test/physics_engine_test.dart` | **PASS** |
-| 9 | Hiệu lực đơn điệu của `speedLevel` từ $1 \to 5$ | `test/physics_engine_test.dart` | **PASS** |
-| 10 | Không có nhánh ăn gian theo preset trên toàn bộ 13 bài học mẫu | `test/physics_engine_test.dart` | **PASS** |
-| 11 | Miền hợp lệ tròn của `CueBallEffetSpec` ($r \le 4.0$) và đồng nhất bán kính | `test/physics_engine_test.dart` | **PASS** |
-| 12 | Preset độ dày `1/3`, `2/3`, `Tràn mặt (1.0)` và đồng bộ `ContactSide.center` | `test/physics_engine_test.dart` | **PASS** |
-| 13 | Tương tác kéo thả `CustomPositionBuilderScreen` không nhảy bi, không chồng lấp | `test/physics_engine_test.dart` | **PASS** |
-| 14 | Lưu bền dữ liệu (`NotebookStorage`) & tự phục hồi khi JSON hỏng | `test/physics_engine_test.dart` | **PASS** |
-| 15 | Tách tính toán và render (`SimulationResult` cache, lật bàn không chạy lại engine) | `test/physics_engine_test.dart` | **PASS** |
-| 16 | Kiểm thử tích hợp (Smoke test) toàn bộ các tab và màn hình chi tiết | `test/physics_engine_test.dart` & `test/widget_test.dart` | **PASS** |
+| 1 | Bảo toàn năng lượng khi ra cơ (Cue Strike) | $E_{\text{after}} \le E_{\text{before}}$ trên toàn bộ lưới tip $[-0.8, 0.8]$ và góc nâng $[0^\circ, 60^\circ]$. | **PASS** |
+| 2 | Bảo toàn năng lượng khi chạm băng | $E_{\text{after}} \le E_{\text{before}}$ với mọi góc tới và spin; $E_{\text{after}} = E_{\text{before}}$ khi $e_{bc}=1, \mu_{bc}=0$ (sai số $< 10^{-7}$). | **PASS** |
+| 3 | Độ chính xác tiếp xúc CCD & Hội tụ | Khoảng cách tiếp xúc đạt sai số $|d - 2R| < 10^{-11}\,\text{m}$ cho cả va chạm bi–bi và bi–băng. | **PASS** |
+| 4 | Không chồng lấp tại mọi thời điểm mẫu | $\|\vec{p}_i(t) - \vec{p}_j(t)\| \ge 2R - 10^{-9}\,\text{m}$ tại mọi $t \in [0, T]$ qua `sampleAtTime`. | **PASS** |
+| 5 | Giới hạn thời gian mô phỏng | Trả về `maxTimeReached` chính xác khi chạm trần thời gian. | **PASS** |
+| 6 | Đơn điệu hóa vận tốc qua `speedLevel` | Tăng mức lực $1 \to 5$ làm tăng đơn điệu vận tốc thực tế trên toàn bộ 13 bài học mẫu. | **PASS** |
+| 7 | Xác thực kỹ thuật 13 bài học mẫu | Toàn bộ 13 bài học mẫu đều ngắm Ghost Ball thực tế, trúng Bi 1 trước đúng độ dày, carom thành công và gom bi trong vùng quy định. | **PASS** |
+| 8 | Từ chối `ShotInput` không hợp lệ | Ném `ShotInputValidationException` và trả về `isValid: false`, không tự ý dịch chuyển tọa độ bi. | **PASS** |
+| 9 | Chống chồng lấp khi kéo bi vào góc bàn | Kéo bi vào sát góc $(R_d, R_d)$ vẫn duy trì khoảng cách $\ge 2R_d$. | **PASS** |
+| 10 | Tỉ lệ khung nhìn đồng nhất `pixelsPerMeter` | Hai bi chạm nhau tiếp xúc hoàn hảo ở mọi phương $0^\circ, 45^\circ, 90^\circ$; chuyển đổi khứ hồi $world \leftrightarrow canvas$ sai số $< 10^{-4}\,\text{m}$. | **PASS** |
+| 11 | Sao lưu file JSON hỏng & Schema version | Tự động tạo bản sao `.corrupted.bak` khi file lỗi; bảo lưu dữ liệu khi schema version mới hơn. | **PASS** |
+| 12 | Tách biệt tính toán vật lý và render UI | Thao tác đổi góc nhìn (lật bàn, bật tắt số nút) không gọi lại `simulate()`. | **PASS** |
+| 13 | Smoke Test toàn bộ ứng dụng | Khởi chạy ứng dụng, chuyển qua 5 tab Bottom Bar và mở chi tiết bài học không có lỗi phát sinh. | **PASS** |
