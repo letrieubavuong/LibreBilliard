@@ -10,10 +10,19 @@ class CueBallEffetPainter extends BaseBilliardPainter<CueBallEffetSpec> {
     super.mode,
   });
 
+  /// Công thức bán kính bi duy nhất trên Canvas, dùng chung cho cả hàm vẽ và xử lý cảm ứng chạm/kéo.
+  static double ballPixelRadiusFor(Size size) =>
+      (size.shortestSide * 0.42).clamp(16.0, 48.0);
+
+  /// Bán kính miền hợp lệ tối đa của đầu cơ trên Canvas (`0.80 * R`).
+  static double maxTipPixelRadiusFor(Size size) =>
+      ballPixelRadiusFor(size) * CueBallEffetSpec.maxPhysicalRadiusRatio;
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide * 0.42).clamp(16.0, 48.0);
+    final radius = ballPixelRadiusFor(size);
+    final maxTipRadius = maxTipPixelRadiusFor(size);
 
     // 1. Vẽ thân bi chủ 3D
     drawSphereBall(
@@ -23,14 +32,14 @@ class CueBallEffetPainter extends BaseBilliardPainter<CueBallEffetSpec> {
       BilliardPalette.cueBallWhite,
     );
 
-    // 2. Vẽ các vòng chia mức ép-phê (1-2-3-4 mũi) và trục chữ thập
+    // 2. Vẽ các vòng chia mức ép-phê (2 mũi và biên tối đa 4 mũi = 0.80R) và trục chữ thập
     final ringPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.14)
+      ..color = Colors.black.withValues(alpha: 0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    canvas.drawCircle(center, radius * 0.42, ringPaint);
-    canvas.drawCircle(center, radius * 0.78, ringPaint);
+    canvas.drawCircle(center, maxTipRadius * 0.5, ringPaint);
+    canvas.drawCircle(center, maxTipRadius, ringPaint);
 
     // Trục ngang (Ép-phê Trái - Phải) & Trục dọc (12h Cu-lê - 6h Trô)
     canvas.drawLine(
@@ -53,10 +62,11 @@ class CueBallEffetPainter extends BaseBilliardPainter<CueBallEffetSpec> {
     }
 
     // 4. Vẽ điểm đầu cơ chạm bi chủ (Chấm lơ đỏ + vòng sáng)
+    // normalizedTipOffset đã nằm trong đĩa tròn đơn vị <= 1.0 ngay từ model CueBallEffetSpec
     final normalized = spec.normalizedTipOffset;
     final tipPoint = Offset(
-      center.dx + normalized.dx * radius * 0.78,
-      center.dy + normalized.dy * radius * 0.78,
+      center.dx + normalized.dx * maxTipRadius,
+      center.dy + normalized.dy * maxTipRadius,
     );
 
     // Đường nối từ tâm ra điểm chạm để dễ nhìn độ lệch
@@ -139,19 +149,21 @@ class CueBallEffetDiagram extends BaseBilliardDiagramWidget<CueBallEffetSpec> {
   void _handleLocalTouch(Offset localPosition, Size canvasSize) {
     if (onSpecChanged == null) return;
     final center = Offset(canvasSize.width / 2, canvasSize.height / 2);
-    final maxRadius = canvasSize.shortestSide * 0.42 * 0.78;
-    if (maxRadius <= 0) return;
+    final maxTipRadius = CueBallEffetPainter.maxTipPixelRadiusFor(canvasSize);
+    if (maxTipRadius <= 0) return;
 
-    final dx = ((localPosition.dx - center.dx) / maxRadius).clamp(-1.0, 1.0);
-    final dy = ((localPosition.dy - center.dy) / maxRadius).clamp(-1.0, 1.0);
+    final rawDx = (localPosition.dx - center.dx) / maxTipRadius;
+    final rawDy = (localPosition.dy - center.dy) / maxTipRadius;
 
-    final horizontalTips = (dx * 4.0 * 2).round() / 2.0; // Làm tròn 0.5 mũi
-    final verticalTips = (-dy * 4.0 * 2).round() / 2.0;
+    // Quy đổi sang số mũi cơ và làm tròn bước 0.25 mũi, sau đó CueBallEffetSpec.fromTips
+    // sẽ chiếu (project) chính xác về đĩa tròn hợp lệ sqrt(h^2 + v^2) <= 4.0.
+    final rawHTips = (rawDx * CueBallEffetSpec.maxTips * 4).round() / 4.0;
+    final rawVTips = (-rawDy * CueBallEffetSpec.maxTips * 4).round() / 4.0;
 
     onSpecChanged!(
       CueBallEffetSpec.fromTips(
-        horizontalTips: horizontalTips,
-        verticalTips: verticalTips,
+        horizontalTips: rawHTips,
+        verticalTips: rawVTips,
         description: spec.description,
       ),
     );
@@ -214,4 +226,3 @@ class CueBallEffetDiagram extends BaseBilliardDiagramWidget<CueBallEffetSpec> {
     );
   }
 }
-

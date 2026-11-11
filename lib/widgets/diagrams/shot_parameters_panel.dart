@@ -25,27 +25,27 @@ class ShotParametersSummaryBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Sơ đồ Chạm trái thu nhỏ (kế thừa từ BaseBilliardDiagramWidget)
           BallContactDiagram(
             spec: params.contact,
             mode: DiagramDisplayMode.thumbnail,
           ),
           const SizedBox(width: 8),
-          // Sơ đồ Tâm bi & Ép-phê thu nhỏ (kế thừa từ BaseBilliardDiagramWidget)
           CueBallEffetDiagram(
             spec: params.effet,
             mode: DiagramDisplayMode.thumbnail,
           ),
           const SizedBox(width: 10),
-          // Thông tin chữ tóm tắt
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.adjust,
-                        size: 13, color: BilliardPalette.diamondGold),
+                    const Icon(
+                      Icons.adjust,
+                      size: 13,
+                      color: BilliardPalette.diamondGold,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -63,8 +63,11 @@ class ShotParametersSummaryBar extends StatelessWidget {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(Icons.gps_fixed,
-                        size: 13, color: BilliardPalette.chalkTipRed),
+                    const Icon(
+                      Icons.gps_fixed,
+                      size: 13,
+                      color: BilliardPalette.chalkTipRed,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -81,8 +84,11 @@ class ShotParametersSummaryBar extends StatelessWidget {
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    const Icon(Icons.speed,
-                        size: 13, color: BilliardPalette.cueTrajectory),
+                    const Icon(
+                      Icons.speed,
+                      size: 13,
+                      color: BilliardPalette.cueTrajectory,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -111,6 +117,7 @@ class ShotParametersDetailPanel extends StatelessWidget {
   final DiagramDisplayMode mode;
   final ValueChanged<BallContactSpec>? onContactChanged;
   final ValueChanged<CueBallEffetSpec>? onEffetChanged;
+  final ValueChanged<int>? onSpeedLevelChanged;
 
   const ShotParametersDetailPanel({
     super.key,
@@ -118,6 +125,7 @@ class ShotParametersDetailPanel extends StatelessWidget {
     this.mode = DiagramDisplayMode.standard,
     this.onContactChanged,
     this.onEffetChanged,
+    this.onSpeedLevelChanged,
   });
 
   @override
@@ -146,7 +154,6 @@ class ShotParametersDetailPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        // Thanh hiển thị Kiểu ra cơ & Lực đánh
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
@@ -154,37 +161,66 @@ class ShotParametersDetailPanel extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: BilliardPalette.cardBorder),
           ),
-          child: Row(
+          child: Column(
             children: [
-              const Icon(Icons.bolt,
-                  size: 18, color: BilliardPalette.cueTrajectory),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
+                children: [
+                  const Icon(
+                    Icons.bolt,
+                    size: 18,
+                    color: BilliardPalette.cueTrajectory,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'KIỂU RA CƠ & ĐỊNH LƯỢNG LỰC',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.6,
+                            color: BilliardPalette.diamondGold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          params.strokeType,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _SpeedBar(level: params.speedLevel),
+                ],
+              ),
+              if (mode == DiagramDisplayMode.interactive &&
+                  onSpeedLevelChanged != null) ...[
+                const SizedBox(height: 6),
+                Row(
                   children: [
                     const Text(
-                      'KIỂU RA CƠ & ĐỊNH LƯỢNG LỰC',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.6,
-                        color: BilliardPalette.diamondGold,
-                      ),
+                      'Điều chỉnh Lực:',
+                      style: TextStyle(fontSize: 11.5, color: Colors.white70),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      params.strokeType,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                    Expanded(
+                      child: Slider(
+                        value: params.speedLevel.toDouble(),
+                        min: 1,
+                        max: 5,
+                        divisions: 4,
+                        label: 'Lực ${params.speedLevel}/5',
+                        onChanged: (v) => onSpeedLevelChanged!(v.round()),
                       ),
                     ),
                   ],
                 ),
-              ),
-              _SpeedBar(level: params.speedLevel),
+              ],
             ],
           ),
         ),
@@ -232,4 +268,3 @@ class _SpeedBar extends StatelessWidget {
     );
   }
 }
-

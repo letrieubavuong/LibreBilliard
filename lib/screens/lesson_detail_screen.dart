@@ -34,6 +34,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   late int _count;
   late BallContactSpec _activeContact;
   late CueBallEffetSpec _activeEffet;
+  late int _activeSpeedLevel;
   late TextEditingController _noteController;
   bool _customizeMode = false;
 
@@ -44,6 +45,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _count = widget.practiceCount;
     _activeContact = widget.lesson.shotParams.contact;
     _activeEffet = widget.lesson.shotParams.effet;
+    _activeSpeedLevel = widget.lesson.shotParams.speedLevel;
     _noteController = TextEditingController(text: widget.personalNote ?? '');
   }
 
@@ -60,7 +62,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       lesson: lesson,
       activeContact: _activeContact,
       activeEffet: _activeEffet,
+      activeSpeedLevel: _activeSpeedLevel,
     );
+    final isSuccess = solvedOutcome.isSuccessfulShot;
 
     return Scaffold(
       appBar: AppBar(
@@ -86,7 +90,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             Expanded(
               child: Text(
                 lesson.title,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -143,53 +148,48 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 2. SƠ ĐỒ BÀN TƯƠNG TÁC (Kế thừa từ BaseBilliardDiagramWidget -> CaromTableDiagram)
+          // 2. SƠ ĐỒ BÀN TƯƠNG TÁC (Nhận trực tiếp SimulationResult từ CaromPhysicsEngine)
           CaromTableDiagram(
             spec: solvedOutcome.updatedDiagram,
+            simulationResult: solvedOutcome.simulationResult,
             mode: DiagramDisplayMode.interactive,
-            titleOverride: 'SƠ ĐỒ BÀN & MÔ PHỎNG VẬT LÝ (KHÔNG CHỒNG LẤP BI)',
+            titleOverride: 'SƠ ĐỒ BÀN & MÔ PHỎNG VẬT LÝ SI (CHÍNH XÁC)',
           ),
-          if (_customizeMode) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: (solvedOutcome.hitsSecondBall &&
-                        solvedOutcome.gathersInZone)
-                    ? const Color(0xFF153826)
-                    : const Color(0xFF3A1D1D),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: (solvedOutcome.hitsSecondBall &&
-                          solvedOutcome.gathersInZone)
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSuccess
+                  ? const Color(0xFF153826)
+                  : const Color(0xFF3A1D1D),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSuccess
+                    ? BilliardPalette.diamondGold
+                    : BilliardPalette.chalkTipRed,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isSuccess
+                      ? Icons.check_circle_outline
+                      : Icons.warning_amber_rounded,
+                  size: 18,
+                  color: isSuccess
                       ? BilliardPalette.diamondGold
                       : BilliardPalette.chalkTipRed,
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    (solvedOutcome.hitsSecondBall &&
-                            solvedOutcome.gathersInZone)
-                        ? Icons.check_circle_outline
-                        : Icons.warning_amber_rounded,
-                    size: 18,
-                    color: (solvedOutcome.hitsSecondBall &&
-                            solvedOutcome.gathersInZone)
-                        ? BilliardPalette.diamondGold
-                        : BilliardPalette.chalkTipRed,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    solvedOutcome.feedbackMessage,
+                    style: const TextStyle(fontSize: 12.5),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      solvedOutcome.feedbackMessage,
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
           const SizedBox(height: 16),
 
           // 3. CÔNG THỨC BỘ SỐ (nếu thuộc mục Bộ số)
@@ -203,7 +203,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.functions, color: BilliardPalette.diamondGold),
+                  const Icon(
+                    Icons.functions,
+                    color: BilliardPalette.diamondGold,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -240,7 +243,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'THÔNG SỐ CÚ ĐÁNH (CHẠM TRÁI & ÉP-PHÊ)',
+                  'THÔNG SỐ CÚ ĐÁNH (CHẠM TRÁI, ÉP-PHÊ & LỰC)',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -256,6 +259,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     if (!_customizeMode) {
                       _activeContact = lesson.shotParams.contact;
                       _activeEffet = lesson.shotParams.effet;
+                      _activeSpeedLevel = lesson.shotParams.speedLevel;
                     }
                   });
                 },
@@ -275,7 +279,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               contact: _activeContact,
               effet: _activeEffet,
               strokeType: lesson.shotParams.strokeType,
-              speedLevel: lesson.shotParams.speedLevel,
+              speedLevel: _activeSpeedLevel,
             ),
             mode: _customizeMode
                 ? DiagramDisplayMode.interactive
@@ -284,6 +288,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 setState(() => _activeContact = newContact),
             onEffetChanged: (newEffet) =>
                 setState(() => _activeEffet = newEffet),
+            onSpeedLevelChanged: (newSpeed) =>
+                setState(() => _activeSpeedLevel = newSpeed),
           ),
           const SizedBox(height: 18),
 
@@ -407,13 +413,15 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                     FocusScope.of(context).unfocus();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Đã lưu ghi chú cá nhân cho hình bi này!'),
+                        content:
+                            Text('Đã lưu ghi chú cá nhân cho hình bi này!'),
                         duration: Duration(seconds: 2),
                       ),
                     );
                   },
                   icon: const Icon(Icons.save_outlined, size: 16),
-                  label: const Text('Lưu ghi chú', style: TextStyle(fontSize: 12)),
+                  label:
+                      const Text('Lưu ghi chú', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -430,8 +438,10 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle_outline,
-                    color: BilliardPalette.diamondGold),
+                const Icon(
+                  Icons.check_circle_outline,
+                  color: BilliardPalette.diamondGold,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -440,7 +450,9 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       const Text(
                         'Theo dõi lượt tập hình bi này',
                         style: TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.bold),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         'Đã hoàn thành: $_count lượt tập (Mục tiêu: 10 lượt/buổi)',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/billiard_specs.dart';
+import '../../physics/aim_geometry.dart';
 import 'base_billiard_diagram.dart';
 
 /// Painter vẽ sơ đồ CHẠM TRÁI (Độ dày chạm bi mục tiêu 1)
@@ -25,14 +26,18 @@ class BallContactPainter extends BaseBilliardPainter<BallContactSpec> {
       guidePaint,
     );
 
-    // Tính độ lệch tâm giữa Bi chủ (Ghost) và Bi mục tiêu (Vàng) dựa trên fraction (0..1)
-    // Khi fraction = 1.0 (tràn mặt): độ lệch ngang = 0
-    // Khi fraction = 0.5 (1/2 trái): tâm bi chủ trùng mép bi mục tiêu -> lệch = 1 * ballRadius
-    // Khi fraction -> 0 (mỏng sát mép): lệch tiến sát 2 * ballRadius
+    // Tính độ lệch tâm b = 2 * R * (1 - f) từ công thức chuẩn AimGeometry:
+    // - Khi fraction = 1.0 (tràn mặt / ContactSide.center): b = 0 (góc cắt 0°)
+    // - Khi fraction = 0.5 (1/2 trái): b = 1.0 * ballRadius (góc cắt 30°)
+    // - Khi fraction -> 0 (mỏng sát mép): b -> 2.0 * ballRadius
     final sign = spec.side == ContactSide.left
         ? -1.0
         : (spec.side == ContactSide.right ? 1.0 : 0.0);
-    final horizontalOffset = (1.0 - spec.fraction) * 2.0 * ballRadius * sign;
+    final impactParam = AimGeometry.impactParameter(
+      fraction: spec.fraction,
+      ballRadius: ballRadius,
+    );
+    final horizontalOffset = impactParam * sign;
 
     final objectBallCenter = Offset(
       center.dx - horizontalOffset * 0.35,
@@ -54,7 +59,10 @@ class BallContactPainter extends BaseBilliardPainter<BallContactSpec> {
     // 2. Vẽ vùng giao nhau (phần diện tích chạm trái)
     canvas.save();
     canvas.clipPath(
-      Path()..addOval(Rect.fromCircle(center: objectBallCenter, radius: ballRadius)),
+      Path()
+        ..addOval(
+          Rect.fromCircle(center: objectBallCenter, radius: ballRadius),
+        ),
     );
     canvas.drawCircle(
       cueBallCenter,
@@ -136,13 +144,16 @@ class BallContactDiagram extends BaseBilliardDiagramWidget<BallContactSpec> {
   @override
   Widget? buildInteractiveControls(BuildContext context) {
     if (onSpecChanged == null) return null;
+    final nonCenterSide =
+        spec.side == ContactSide.center ? ContactSide.right : spec.side;
     final presets = <BallContactSpec>[
-      BallContactSpec.oneEighth(side: spec.side),
-      BallContactSpec.oneQuarter(side: spec.side),
-      BallContactSpec.oneThird(side: spec.side),
-      BallContactSpec.half(side: spec.side),
-      BallContactSpec.twoThirds(side: spec.side),
-      BallContactSpec.threeQuarters(side: spec.side),
+      BallContactSpec.oneEighth(side: nonCenterSide),
+      BallContactSpec.oneQuarter(side: nonCenterSide),
+      BallContactSpec.oneThird(side: nonCenterSide),
+      BallContactSpec.half(side: nonCenterSide),
+      BallContactSpec.twoThirds(side: nonCenterSide),
+      BallContactSpec.threeQuarters(side: nonCenterSide),
+      BallContactSpec.full(),
     ];
 
     return Column(
@@ -153,7 +164,7 @@ class BallContactDiagram extends BaseBilliardDiagramWidget<BallContactSpec> {
           runSpacing: 4,
           alignment: WrapAlignment.center,
           children: presets.map((preset) {
-            final selected = (preset.fraction - spec.fraction).abs() < 0.04;
+            final selected = (preset.fraction - spec.fraction).abs() < 0.03;
             final shortLabel = preset.label.replaceAll(' trái', '');
             return ChoiceChip(
               label: Text(shortLabel, style: const TextStyle(fontSize: 10.5)),
@@ -169,16 +180,18 @@ class BallContactDiagram extends BaseBilliardDiagramWidget<BallContactSpec> {
           segments: const [
             ButtonSegment(
               value: ContactSide.left,
-              label: Text('Má Trái', style: TextStyle(fontSize: 11)),
+              label: Text('Má Trái', style: TextStyle(fontSize: 10.5)),
+            ),
+            ButtonSegment(
+              value: ContactSide.center,
+              label: Text('Trực diện', style: TextStyle(fontSize: 10.5)),
             ),
             ButtonSegment(
               value: ContactSide.right,
-              label: Text('Má Phải', style: TextStyle(fontSize: 11)),
+              label: Text('Má Phải', style: TextStyle(fontSize: 10.5)),
             ),
           ],
-          selected: {
-            spec.side == ContactSide.center ? ContactSide.right : spec.side
-          },
+          selected: {spec.side},
           onSelectionChanged: (selection) {
             onSpecChanged!(spec.copyWith(side: selection.first));
           },
@@ -187,4 +200,3 @@ class BallContactDiagram extends BaseBilliardDiagramWidget<BallContactSpec> {
     );
   }
 }
-

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/billiard_specs.dart';
+import '../models/carom_physics_solver.dart';
+import '../physics/billiard_physics.dart';
 import 'diagrams/base_billiard_diagram.dart';
 import 'diagrams/carom_table_diagram.dart';
 import 'diagrams/cue_ball_effet_diagram.dart';
@@ -15,7 +17,7 @@ enum CaromSystemType {
 }
 
 /// Máy tính Bộ số Đa năng (Bộ 50, Bộ Cộng 2, Tia 1 Băng + Ép-phê)
-/// Tái sử dụng [CaromTableDiagram] từ kiến trúc kế thừa để vẽ đường tia theo thời gian thực.
+/// Kết hợp Công thức Bộ số Lý thuyết (Guideline Layer) và Mô phỏng Vật lý thật (`CaromPhysicsEngine`).
 class DiamondSystemCalculatorCard extends StatefulWidget {
   const DiamondSystemCalculatorCard({super.key});
 
@@ -38,34 +40,50 @@ class _DiamondSystemCalculatorCardState
   double _effetTipsPlus2 = 2.5; // 1..4 mũi
 
   // Tham số cho Tia 1 Băng (Bricole)
-  double _oneRailCueX = 20; // 10..70
-  double _oneRailTargetX = 60; // 10..70
-  double _oneRailEffet = 2.0; // -3..+3 mũi
+  double _oneRailCueX = 20; // 10..45
+  double _oneRailTargetX = 60; // 35..75
+  double _oneRailEffet = 2.0; // -2..+3 mũi
 
-  TableDiagramSpec _buildDiagramForActiveSystem() {
+  ({TableDiagramSpec spec, SimulationResult simulation})
+      _buildSystemSimulation() {
     switch (_systemType) {
       case CaromSystemType.system50:
         final firstRailAim =
             (_cuePosition50 - _targetThirdRail50).clamp(5.0, 50.0);
-        return TableDiagramSpec(
+        final aimTarget = Offset((firstRailAim / 10.0).clamp(0.5, 6.5), 0.0);
+        final spec = TableDiagramSpec(
           label:
               'Bộ 50: Đứng ${_cuePosition50.round()} − Trúng ${_targetThirdRail50.round()} ⇒ Ngắm Băng 1 tại ${firstRailAim.round()}',
           description: 'Chuẩn 3 mũi ép-phê thuận • Ra cơ xuyên suốt',
           cueBall: Offset((_cuePosition50 / 10.0).clamp(1.0, 7.5), 3.65),
           objectBall1:
               Offset((_targetThirdRail50 / 10.0).clamp(0.8, 7.2), 3.45),
-          objectBall2:
-              Offset((_targetThirdRail50 / 10.0 + 0.35).clamp(1.0, 7.5), 3.3),
+          objectBall2: Offset(
+            (_targetThirdRail50 / 10.0 + 0.35).clamp(1.0, 7.5),
+            3.3,
+          ),
           cueBallPath: [
-            Offset((firstRailAim / 10.0).clamp(0.5, 6.5), 0.0),
+            aimTarget,
             const Offset(0.0, 1.85),
             Offset((_targetThirdRail50 / 10.0).clamp(0.5, 7.5), 4.0),
             Offset((_targetThirdRail50 / 10.0 + 0.2).clamp(0.8, 7.5), 3.4),
           ],
-          objectBall1Path: const [],
-          objectBall2Path: const [],
           showDiamondNumbers: true,
           showCornerZones: false,
+        );
+        final input = CaromPhysicsSolver.buildShotInput(
+          diagram: spec,
+          contact: BallContactSpec.full(),
+          effet: CueBallEffetSpec.fromTips(
+            horizontalTips: -3.0,
+            verticalTips: 1.5,
+          ),
+          speedLevel: 4,
+          aimTargetDiamond: aimTarget,
+        );
+        return (
+          spec: spec,
+          simulation: CaromPhysicsSolver.runCachedSimulation(input),
         );
 
       case CaromSystemType.plusTwo:
@@ -74,54 +92,84 @@ class _DiamondSystemCalculatorCardState
                 .clamp(15.0, 65.0);
         final landingCornerX =
             (7.5 - (_shortRailStart - 10) * 0.08).clamp(5.2, 7.7);
-        return TableDiagramSpec(
+        final aimTarget = Offset((aimLongRail / 10.0).clamp(1.0, 7.0), 0.0);
+        final spec = TableDiagramSpec(
           label:
               'Cộng 2: Xuất phát ${_shortRailStart.round()} + 20 ⇒ Ngắm nút ${aimLongRail.round()} băng dài',
           description:
               'Áp dụng khi bi chủ đứng gần băng ngắn đánh sang góc bên kia bàn',
           cueBall: Offset(0.45, (_shortRailStart / 10.0).clamp(0.4, 3.2)),
-          objectBall1: Offset(1.3, (_shortRailStart / 10.0 * 0.7).clamp(0.4, 2.8)),
+          objectBall1:
+              Offset(1.3, (_shortRailStart / 10.0 * 0.7).clamp(0.4, 2.8)),
           objectBall2: Offset(landingCornerX - 0.5, 0.65),
           cueBallPath: [
-            Offset((aimLongRail / 10.0).clamp(1.0, 7.0), 0.0),
+            aimTarget,
             Offset(landingCornerX, 4.0),
             Offset(landingCornerX - 0.5, 0.65),
           ],
-          objectBall1Path: const [],
-          objectBall2Path: const [],
           showDiamondNumbers: true,
           showCornerZones: true,
+        );
+        final input = CaromPhysicsSolver.buildShotInput(
+          diagram: spec,
+          contact: BallContactSpec.full(),
+          effet: CueBallEffetSpec.fromTips(
+            horizontalTips: -_effetTipsPlus2,
+            verticalTips: 1.5,
+          ),
+          speedLevel: 4,
+          aimTargetDiamond: aimTarget,
+        );
+        return (
+          spec: spec,
+          simulation: CaromPhysicsSolver.runCachedSimulation(input),
         );
 
       case CaromSystemType.oneCushion:
         final midPoint = (_oneRailCueX + _oneRailTargetX) / 2.0;
-        // Mỗi mũi ép-phê thuận làm mở góc ~0.5 nút (5 đơn vị) nên cần lùi điểm ngắm về phía bi chủ
-        final compensatedAim = (midPoint - _oneRailEffet * 5.0).clamp(5.0, 75.0);
-        return TableDiagramSpec(
+        final compensatedAim =
+            (midPoint - _oneRailEffet * 5.0).clamp(5.0, 75.0);
+        final aimTarget = Offset((compensatedAim / 10.0).clamp(0.4, 7.6), 0.0);
+        final spec = TableDiagramSpec(
           label:
               'Tia 1 Băng: Trung điểm ${midPoint.round()} − (${_oneRailEffet.toStringAsFixed(1)} ép-phê × 5) ⇒ Ngắm nút ${compensatedAim.round()}',
           description:
               'Mỗi 1 mũi ép-phê dịch chuyển điểm rơi khoảng 0.5 nút băng (5 đơn vị)',
           cueBall: Offset((_oneRailCueX / 10.0).clamp(0.5, 7.5), 3.35),
           objectBall1: Offset((_oneRailTargetX / 10.0).clamp(0.5, 7.5), 3.15),
-          objectBall2:
-              Offset((_oneRailTargetX / 10.0 + 0.35).clamp(0.7, 7.7), 2.95),
+          objectBall2: Offset(
+            (_oneRailTargetX / 10.0 + 0.35).clamp(0.7, 7.7),
+            2.95,
+          ),
           cueBallPath: [
-            Offset((compensatedAim / 10.0).clamp(0.4, 7.6), 0.0),
+            aimTarget,
             Offset((_oneRailTargetX / 10.0).clamp(0.5, 7.5), 3.15),
             Offset((_oneRailTargetX / 10.0 + 0.35).clamp(0.7, 7.7), 2.95),
           ],
-          objectBall1Path: const [],
-          objectBall2Path: const [],
           showDiamondNumbers: true,
           showCornerZones: false,
+        );
+        final input = CaromPhysicsSolver.buildShotInput(
+          diagram: spec,
+          contact: BallContactSpec.full(),
+          effet: CueBallEffetSpec.fromTips(
+            horizontalTips: -_oneRailEffet,
+            verticalTips: 1.0,
+          ),
+          speedLevel: 3,
+          aimTargetDiamond: aimTarget,
+        );
+        return (
+          spec: spec,
+          simulation: CaromPhysicsSolver.runCachedSimulation(input),
         );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final dynamicSpec = _buildDiagramForActiveSystem();
+    final solved = _buildSystemSimulation();
+    final dynamicSpec = solved.spec;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -196,11 +244,13 @@ class _DiamondSystemCalculatorCardState
             const SizedBox(height: 10),
             ..._buildSlidersForActiveSystem(),
             const SizedBox(height: 6),
-            // Tái sử dụng CaromTableDiagram từ hệ thống kế thừa
             CaromTableDiagram(
               spec: dynamicSpec,
+              simulationResult: solved.simulation,
+              initialShowGuidelines: true,
               mode: DiagramDisplayMode.interactive,
-              titleOverride: 'SƠ ĐỒ TIA BỘ SỐ TRÊN BÀN (CÓ THỂ CHẠY MÔ PHỎNG)',
+              titleOverride:
+                  'SƠ ĐỒ TIA BỘ SỐ TRÊN BÀN (MÔ PHỎNG VẬT LÝ + HƯỚNG DẪN)',
             ),
           ],
         ],
@@ -365,8 +415,11 @@ class _ShotSandboxCardState extends State<ShotSandboxCard> {
         children: [
           const Row(
             children: [
-              Icon(Icons.science_outlined,
-                  size: 18, color: BilliardPalette.diamondGold),
+              Icon(
+                Icons.science_outlined,
+                size: 18,
+                color: BilliardPalette.diamondGold,
+              ),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
