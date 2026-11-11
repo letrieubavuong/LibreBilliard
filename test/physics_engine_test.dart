@@ -353,17 +353,17 @@ void main() {
       final tHit2 = sim2.firstHitObject1Event!.timestamp;
       final tHit3 = sim3.firstHitObject1Event!.timestamp;
 
-      // Thời điểm va chạm Bi 1 hội tụ ở mức sai số máy tính (< 1e-12s)
-      expect((tHit1 - tHit2).abs(), lessThan(1e-6));
-      expect((tHit2 - tHit3).abs(), lessThan(1e-6));
+      // Thời điểm va chạm Bi 1 hội tụ ở mức sai số thực tế ~ 1e-13s (kiểm chứng chặt chẽ < 1e-9s)
+      expect((tHit1 - tHit2).abs(), lessThan(1e-9));
+      expect((tHit2 - tHit3).abs(), lessThan(1e-9));
 
-      // Vị trí dừng cuối cùng của bi chủ hội tụ
+      // Vị trí dừng cuối cùng của bi chủ hội tụ ở mức thực tế ~ 1e-13m (kiểm chứng chặt chẽ < 1e-9m)
       final pos1 = sim1.finalSnapshot.cueBall.position;
       final pos2 = sim2.finalSnapshot.cueBall.position;
       final pos3 = sim3.finalSnapshot.cueBall.position;
 
-      expect((pos1 - pos2).length, lessThan(0.01));
-      expect((pos2 - pos3).length, lessThan(0.01));
+      expect((pos1 - pos2).length, lessThan(1e-9));
+      expect((pos2 - pos3).length, lessThan(1e-9));
     });
 
     test('6. Bất biến không chồng lấp xuyên suốt mô phỏng: sampleAtTime khoảng cách luôn >= 2R - 1e-9 m', () {
@@ -502,6 +502,77 @@ void main() {
         isTrue,
         reason: 'Failure list must report non-draw motion: ${report.failures.join(', ')}',
       );
+    });
+
+    test('9d. Kiểm tra Ngưỡng Biên Chiều Trô (Draw-Back Threshold Boundary Test): Bộ ca s_par = 0, +0.004, -0.004, -0.006m, chỉ -0.006m đạt điều kiện chiều trô', () {
+      // Dựng một cú đánh chuẩn có va chạm Bi 1
+      final kt01 = SampleLessonsRepository.lessons.firstWhere((l) => l.code == 'KT-01');
+      final validOutcome = CaromPhysicsSolver.evaluateAdjustedShot(
+        lesson: kt01,
+        activeContact: kt01.shotParams.contact,
+        activeEffet: kt01.shotParams.effet,
+      );
+      final sim = validOutcome.simulationResult;
+
+      // Tạo fixture chỉ kiểm tra chiều trô lùi
+      const drawFixture = LessonPhysicsVerificationFixture(
+        lessonCode: 'TEST-DRAW-BOUNDARY',
+        expectedFirstBallHit: BallId.object1,
+        expectedContactFraction: 0.75,
+        contactFractionTolerance: 0.1,
+        expectedCuePostImpactMotion: CuePostImpactMotionType.drawBack,
+        expectCarom: false,
+        expectTargetZoneGather: false,
+      );
+
+      // Thay thế snapshot kết thúc để giả lập các giá trị độ dời s_par khác nhau:
+      // Lấy thời điểm va chạm và hướng tới uIn từ chính CollisionEvent
+      final hit1 = sim.firstHitObject1Event!;
+      final pHit = hit1.primaryBallPositionAtCollision ?? sim.sampleAtTime(hit1.timestamp).cueBall.position;
+      final vIn = hit1.primaryBallVelocityBefore ?? sim.sampleAtTime(math.max(0.0, hit1.timestamp - 0.001)).cueBall.velocity;
+      final uIn = vIn / vIn.length;
+
+      // Hàm helper tạo SimulationResult với pEnd xác định
+      SimulationResult createSimWithPostDisplacement(double sParTarget) {
+        final targetEndPos = pHit + uIn * sParTarget;
+        final modifiedSnapshots = sim.snapshots.map((s) {
+          if (s.timestamp > hit1.timestamp) {
+            return SimulationSnapshot(
+              timestamp: s.timestamp,
+              cueBall: s.cueBall.copyWith(position: targetEndPos),
+              objectBall1: s.objectBall1,
+              objectBall2: s.objectBall2,
+            );
+          }
+          return s;
+        }).toList();
+
+        return SimulationResult(
+          config: sim.config,
+          input: sim.input,
+          snapshots: modifiedSnapshots,
+          collisionEvents: sim.collisionEvents,
+          durationSeconds: sim.durationSeconds,
+          terminationReason: sim.terminationReason,
+        );
+      }
+
+      // 1. Ca s_par = +0.004m (tiến 4mm): PHẢI FAIL
+      final repPlus4 = drawFixture.verify(createSimWithPostDisplacement(0.004));
+      expect(repPlus4.isPass, isFalse, reason: 's_par = +0.004m must fail draw-back');
+
+      // 2. Ca s_par = 0.0m (đứng yên / chết bi): PHẢI FAIL
+      final repZero = drawFixture.verify(createSimWithPostDisplacement(0.0));
+      expect(repZero.isPass, isFalse, reason: 's_par = 0.0m must fail draw-back');
+
+      // 3. Ca s_par = -0.004m (lùi 4mm, chưa đủ ngưỡng 5mm): PHẢI FAIL
+      final repMinus4 = drawFixture.verify(createSimWithPostDisplacement(-0.004));
+      expect(repMinus4.isPass, isFalse, reason: 's_par = -0.004m must fail draw-back');
+
+      // 4. Ca s_par = -0.006m (lùi 6mm, vượt ngưỡng 5mm): ĐẠT ĐIỀU KIỆN CHIỀU TRÔ!
+      final repMinus6 = drawFixture.verify(createSimWithPostDisplacement(-0.006));
+      expect(repMinus6.failures.any((f) => f.contains('không kéo lùi (Rétro)')), isFalse,
+          reason: 's_par = -0.006m must satisfy draw-back motion direction');
     });
 
     test('9c. Fixture Strict Null Checks: Thiếu số đo má chạm, fraction hoặc gom bi chưa xác định phải FAIL thay vì bỏ qua', () {

@@ -11,7 +11,7 @@ class SampleLessonsRepository {
       code: 'KT-01',
       title: 'Kĩ thuật Trô ngắn giữ bi (Rétro Amorti)',
       subtitle:
-          'Kéo bi chủ lùi nhẹ trong phạm vi 15–25cm mà không làm văng bi đích',
+          'Kéo bi chủ lùi 4–8cm sau va chạm Bi 1 (tổng dịch chuyển 15–25cm) gom góc',
       category: LessonCategory.technique,
       subCategory: 'Cú đánh nền tảng',
       difficulty: 'Cơ bản',
@@ -19,7 +19,7 @@ class SampleLessonsRepository {
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Rétro ngắn gom vào góc',
         description:
-            'Bi chủ kéo lùi mềm về chạm bi đỏ, bi vàng đi 1 băng ngắn quay lại',
+            'Bi chủ trô lùi 5.7cm chạm bi đỏ, bi vàng đi 1 băng ngắn quay lại',
         cueBall: Offset(1.65, 1.45),
         objectBall1: Offset(0.92, 1.12),
         objectBall2: Offset(1.40, 1.10),
@@ -59,14 +59,14 @@ class SampleLessonsRepository {
       code: 'KT-02',
       title: 'Kĩ thuật Đẩy mượt (Poussé / Coulé ngắn)',
       subtitle:
-          'Đẩy bi chủ theo sau bi mục tiêu trong khoảng cách hẹp dưới 10cm',
+          'Đẩy bi chủ tịnh tiến 3–6cm sau chạm Bi 1 (tổng dịch chuyển 12–18cm)',
       category: LessonCategory.technique,
       subCategory: 'Cú đánh nền tảng',
       difficulty: 'Trung cấp',
       isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Poussé giữ nhịp dọc băng',
-        description: 'Đẩy đồng tốc cả 2 bi tiến lên 12cm dọc theo băng dài',
+        description: 'Đẩy tịnh tiến mượt cả 2 bi dọc theo băng dài giữ cặp bi song song',
         cueBall: Offset(3.05, 0.58),
         objectBall1: Offset(3.52, 0.36),
         objectBall2: Offset(3.40, 0.12),

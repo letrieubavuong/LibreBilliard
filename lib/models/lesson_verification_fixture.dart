@@ -227,12 +227,11 @@ class LessonPhysicsVerificationFixture {
         failures.add('Không thể đo chuyển động sau va chạm vì bi chủ chưa chạm bi mục tiêu 1');
       } else {
         final tHit = firstHit1.timestamp;
-        final snapHit = sim.sampleAtTime(tHit);
-        final pHit = snapHit.cueBall.position;
+        final pHit = firstHit1.primaryBallPositionAtCollision ?? sim.sampleAtTime(tHit).cueBall.position;
 
-        // Vận tốc tới của bi chủ ngay trước va chạm
-        final tPre = math.max(0.0, tHit - 0.002);
-        final vIn = sim.sampleAtTime(tPre).cueBall.velocity;
+        // Vận tốc tới của bi chủ ngay trước va chạm (lấy từ CollisionEvent nếu có, hoặc suy từ snapshot)
+        final vIn = firstHit1.primaryBallVelocityBefore ??
+            sim.sampleAtTime(math.max(0.0, tHit - 0.002)).cueBall.velocity;
         Vec2 uIn;
         if (vIn.length > 1e-5) {
           uIn = vIn / vIn.length;
@@ -254,18 +253,21 @@ class LessonPhysicsVerificationFixture {
         final sParallel = deltaPost.x * uIn.x + deltaPost.y * uIn.y;
 
         // Kiểm tra hướng chuyển động sau va chạm
+        const epsilonMotion = 0.005; // Ngưỡng tối thiểu 5mm để xác định rõ chiều chuyển động
         if (expectedCuePostImpactMotion == CuePostImpactMotionType.drawBack) {
-          // Bắt buộc bi chủ phải giật lùi ngược hướng tới
-          if (sParallel >= 0.005) {
+          // Bắt buộc bi chủ phải giật lùi ngược hướng tới rõ rệt (s_par < -5mm)
+          if (sParallel > -epsilonMotion) {
             failures.add(
-              'Bi chủ không kéo lùi (Rétro) sau va chạm Bi 1: độ dời dọc mang dấu dương s_par = +${(sParallel * 100).toStringAsFixed(1)}cm (hướng tới, không phải trô lùi)',
+              'Bi chủ không kéo lùi (Rétro) sau va chạm Bi 1: yêu cầu s_par < -${(epsilonMotion * 100).toStringAsFixed(1)}cm, '
+              'thực tế s_par = ${(sParallel * 100).toStringAsFixed(1)}cm',
             );
           }
         } else if (expectedCuePostImpactMotion == CuePostImpactMotionType.pushForward) {
-          // Bắt buộc bi chủ phải tịnh tiến tới cùng chiều hướng tới
-          if (sParallel <= 0.005) {
+          // Bắt buộc bi chủ phải tịnh tiến tới cùng chiều hướng tới rõ rệt (s_par > +5mm)
+          if (sParallel < epsilonMotion) {
             failures.add(
-              'Bi chủ không đẩy tới (Coulé) sau va chạm Bi 1: độ dời dọc mang dấu âm/triệt tiêu s_par = ${(sParallel * 100).toStringAsFixed(1)}cm <= 0 (không tiến tới)',
+              'Bi chủ không đẩy tới (Coulé) sau va chạm Bi 1: yêu cầu s_par > +${(epsilonMotion * 100).toStringAsFixed(1)}cm, '
+              'thực tế s_par = ${(sParallel * 100).toStringAsFixed(1)}cm',
             );
           }
         }

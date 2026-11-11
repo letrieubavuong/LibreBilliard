@@ -1,0 +1,103 @@
+LIBREBILLIARD — REVIEW LẦN 5 VÀ YÊU CẦU THANH TRƯỢT 8 PHẦN / MŨI CƠ 4 MỨC
+Ngày: 11/11/2026
+HEAD đã đọc: 7e1652992e1af4ebb4794b18dcbd03c0e2777fe1
+Repo: https://github.com/letrieubavuong/LibreBilliard
+So với lần 4: thêm 1 commit từ aee5ba441eaa94c4968c687153d8f0852ad6fdff.
+
+I. ĐÁNH GIÁ TIẾN ĐỘ
+- Có raw log trong docs/logs/: flutter_version, flutter_analyze, flutter_test, flutter_build_apk. Log test ghi +21 All tests passed; analyze ghi No issues found; build ghi Built app-debug.apk. Đây là log tác giả commit vào repo, chưa phải lượt chạy độc lập của người review.
+- Fixture đã đo đoạn sau va chạm, đã bắt actual null và yêu cầu gathersInZone==true.
+- Đã phân loại 15 bài: 8 verified nội bộ mô hình, 7 chưa đạt; không tiếp tục gán true đồng loạt.
+- Đã có ca grazing thật qua CCD và ba engine dt=0.001/0.0005/0.00025 trong test mới.
+- Đã có migration dữ liệu legacy và giữ _isReadOnly trong HomeScreen.
+- Giữ các phần này; không làm lại engine từ đầu.
+
+II. CÁC ĐIỂM CÒN CẦN SỬA
+1. P1 — Điều kiện drawBack vẫn sai dấu/ngưỡng.
+   lib/models/lesson_verification_fixture.dart:257–263 đang chỉ fail khi sParallel >= +0.005m. Như vậy sParallel=0 hoặc +0.004m (tiến 4mm) vẫn qua tiêu chí trô.
+   Quy tắc repo/báo cáo lại yêu cầu sParallel < -0.005m.
+   Sửa fail khi sParallel >= -epsilonDraw, với epsilonDraw=0.005m hoặc ngưỡng được giải thích. Thêm ca 0,+0.004,-0.004,-0.006m. Chỉ -0.006 trong bộ ca này được vượt điều kiện chiều trô. Giữ kiểm cự ly riêng.
+   Lưu ý hướng vIn hiện lấy từ sampleAtTime(tHit-0.002), là nội suy giữa snapshot chứ chưa chắc pre-impact chính xác. Nên lưu trạng thái trước/sau event hoặc suy ra từ phân đoạn chính xác để đo kỹ thuật nhất quán.
+
+2. P1 — Cự ly bài học và fixture còn mâu thuẫn.
+   KT-01 nội dung gốc ghi trô 15–25cm nhưng fixture mới min=0.03,max=0.12m và báo cáo đo khoảng -4.2cm. KT-02 nội dung tịnh tiến 10–15cm nhưng fixture kiểm 2–10cm sau chạm.
+   Đây là thay đổi tiêu chí sư phạm; phải thống nhất mô tả, đoạn đo, đơn vị và kỳ vọng. Không gọi đạt 100% bài cũ khi đã thay giới hạn để khớp kết quả mới. Có thể đổi bài cho đúng mục tiêu, nhưng ghi rõ và để giáo viên kiểm lại.
+
+3. P2 — Báo cáo hội tụ chưa khớp assertion.
+   test/physics_engine_test.dart:356–366: dung sai thời điểm là 1e-6s, vị trí cuối là 0.01m (1cm), trong khi docs ghi <1e-12 cho cả thời điểm/vị trí. Cập nhật theo số đo thật; không chỉ ghi sát số máy. Nếu mục tiêu cần chính xác hơn 1cm thì có phép đo convergence và dung sai tương ứng có căn cứ.
+
+4. Bằng chứng APK:
+   Docs đã có kích thước và SHA256, nhưng GitHub Releases/Actions tại thời điểm đọc vẫn rỗng. Log build chỉ trỏ đường cục bộ build/app/outputs/flutter-apk/app-debug.apk. Cần đính kèm APK tải được gắn đúng SHA và checksum; chưa thể cài nghiệm thu từ một đường dẫn trên máy tác giả.
+
+III. YÊU CẦU MỚI — CHẠM TRÁI THEO PHẦN TÁM
+Hiện tại lib/widgets/diagrams/ball_contact_diagram.dart vẫn dùng ChoiceChip [1/8,1/4,1/3,1/2,2/3,3/4,tràn mặt], chưa có Slider.
+
+1. Tạo thanh trượt rời rạc 7 nấc theo chỉ số nguyên k=1..7:
+   k=1 → fraction=0.125 → nhãn 1/8;
+   k=2 → fraction=0.250 → nhãn 2/8;
+   k=3 → fraction=0.375 → nhãn 3/8;
+   k=4 → fraction=0.500 → nhãn 4/8;
+   k=5 → fraction=0.625 → nhãn 5/8;
+   k=6 → fraction=0.750 → nhãn 6/8;
+   k=7 → fraction=0.875 → nhãn 7/8.
+   Có thể ghi thêm tên rút gọn phụ: 2/8 (1/4),4/8 (1/2),6/8 (3/4), nhưng nhãn chính giữ phần tám.
+2. Flutter Slider dùng min=1,max=7,divisions=6 (7 giá trị, không phải 7 khoảng), round k khi nhận thao tác và truyền fraction=k/8.0.
+3. Có nút −/+ để dịch đúng 1/8, không vượt 1..7; label lớn “Chạm 3/8 • Má trái”. Chạm nấc hoặc kéo đều cho cùng kết quả. Hỗ trợ accessibility semantics theo phân số, không chỉ số thập phân.
+4. Má trái/phải là điều khiển riêng. Không gộp độ dày và hướng vào một slider 0..1 mơ hồ. Đổi độ dày giữ má, đổi má giữ độ dày.
+5. Giữ nút Tràn mặt 8/8 riêng (fraction=1,side=center). Khi quay lại chọn độ dày không trực diện, khôi phục độ dày và má trước đó, không mặc định tất cả về má phải/3/4 mà không giải thích.
+6. Fraction phải đi qua BallContactSpec → buildShotInput → AimGeometry → engine. Dùng b=2R(1-f),theta=asin(1-f). Không chia tuyến tính góc cắt thành 7 phần; 4/8 cho góc cắt lí tưởng 30°, không phải 45°.
+7. Ngắm tự do: fraction thực là số đo suy ra. Không kéo ngược hướng ngắm chỉ để snap số đo thực về phần tám. Chỉ khi người dùng chủ động chuyển sang chế độ “Chọn độ dày” mới điều chỉnh tia theo k/8.
+8. Tái sử dụng cùng control tại màn bài học, custom position và sandbox. Thumbnail giữ hiển thị tĩnh.
+9. Bài/sổ tay cũ chứa 1/3,2/3 hoặc giá trị liên tục: bảo toàn chính xác khi đọc; không tự làm tròn vì widget build. Hiển thị rõ “giá trị gốc” nếu chưa nằm trên lưới phần tám; chỉ cập nhật k/8 khi người dùng thao tác. Không tự đổi nội dung và nghiệm thu toàn bộ bài sang phần tám trong cùng commit UI.
+10. Test đủ 7 nấc, ±, trái/phải,8/8 và phục hồi, giá trị truyền engine, lưu–mở lại; test bài1/3 cũ không bị đổi khi mở màn hình.
+
+IV. YÊU CẦU MỚI — ĐIỂM MŨI CƠ THEO MM VỚI BI61.5MM, ĐẦU CƠ11.5–12MM
+Kích thước do giáo viên yêu cầu: ballDiameterMm=61.5; tipDiameterMm tùy chọn 11.5/11.75/12.0, mặc định12.0.
+R=30.75mm. Đầu cơ11.5–12mm chiếm 18.70–19.51% đường kính viên bi trên hình vẽ cùng tỉ lệ.
+
+Vấn đề hiện tại:
+  CueBallEffetSpec.maxPhysicalRadiusRatio=0.80;
+  maxTips=4;
+  4 mức hiện tương ứng offset điểm chạm 0.8R=24.6mm;
+  1 mức=6.15mm. Thang “4 mũi” chưa có định nghĩa dựa trên hình học đầu cơ, và miền tiếp xúc đang quá rộng so với mốc tham khảo thường dùng.
+
+Phải phân biệt:
+A. Các vạch/tầng giúp người học định vị cao–thấp trên hình bi.
+B. Mức ép-phê trái/phải và cao/thấp tạo ra tọa độ điểm chạm.
+C. Tâm đầu cơ hiển thị (cue center/shaft axis offset).
+D. Điểm tiếp xúc thật trên mặt cầu dùng tính mômen.
+Đường kính đầu cơ không phải đường kính vệt tiếp xúc, và chưa đủ xác định C→D: còn độ cong chỏm đầu cơ, hình dạng, góc nâng và mô hình tiếp xúc. Không dùng d_tip/2 như bán kính cong đầu cơ trừ khi đã công bố giả thiết chỏm bán cầu.
+
+QUY ƯỚC ĐỀ XUẤT CHO DỰ ÁN, KHÔNG TỰ NHẬN LÀ CHUẨN DUY NHẤT CỦA LIBRE:
+Nếu dùng “4 tầng/mức” để điều khiển độ lệch, định nghĩa 4 mức tính từ tâm trong vùng điểm chạm tham khảo r_contact<=0.5R. Tâm là mức0 riêng. Mỗi mức là 0.125R=3.84375mm:
+  Mức1:3.84375mm từ tâm;
+  Mức2:7.68750mm;
+  Mức3:11.53125mm;
+  Mức4:15.37500mm (biên tham khảo, không bảo đảm không tạch cơ).
+Hiển thị 4 vòng định vị đồng tâm hoặc các vạch cao/thấp có chú giải, kết hợp trục ngang trái/phải và trục dọc12h/6h. Tên “tầng” cao–thấp và “mức ép-phê” ngang phải rõ ràng; không ngầm đồng nhất một mức với một đường kính đầu cơ.
+Nếu giáo viên dùng cách đánh số4tầng trên TOÀN đường kính, đó là cách chia dải sư phạm khác: cần dùng đúng sơ đồ được duyệt; không tự áp các tâm dải làm điểm chạm vật lí và không kéo điểm chạm ra sát rìa bi. Các offset vật lí vẫn phải ghi bằng mm riêng.
+
+Thiết kế điều khiển:
+1. Thang trái/phải và cao/thấp có dấu, tâm0; có thể chọn4mức ở mỗi chiều theo quy ước đã duyệt. Chấm tương tác kéo liên tục vẫn hiển thị mm thực, không lừa rằng mọi giá trị liên tục là một mức nguyên.
+2. Ràng buộc chung bằng đĩa tròn cho điểm tiếp xúc: x²+z²<=r_limit². Không cho vừa4trái vừa4cao thành offset chéo vượt miền. Nếu chiếu về biên, cập nhật cả số hiển thị, nhãn và dữ liệu lưu cùng tọa độ thực; không giữ nhãn4+4 nhưng dùng tọa độ khác.
+3. Lưu contactOffsetMm (hoặc ratio rõ đơn vị) làm giá trị vật lí chuẩn. Nhãn4mức chỉ là biểu diễn. Engine nhận cùng điểm mà UI đánh dấu.
+4. Trên hình bi lớn, vẽ vòng tròn đầu cơ đúng tỉ lệ11.5–12mm và chấm nhỏ điểm tiếp xúc phân biệt. Nếu chưa có mô hình chỏm tip, ghi vòng tròn đầu cơ là hình tham chiếu kích thước và KHÔNG giả định tâm vòng đó chính là điểm tiếp xúc thật.
+5. Vẽ mốc tham khảo natural-roll tại z=+0.4R=12.3mm trong mô hình cơ ngang lí tưởng. Không hứa mọi cú đặt mũi cơ tại đó sẽ giữ cùng trạng thái khi tới bi đích; còn ma sát và quãng đường.
+6. Vùng offset trên mốc tham khảo0.5R phải được giải thích/giới hạn theo mô hình đã kiểm chứng; không để0.8R mặc định như một cú đánh bình thường rồi gán nhãn chuẩn. Chế độ nghiên cứu có thể giữ dữ liệu cũ nhưng phải hiển thị rõ phạm vi.
+7. Đổi tipDiameter không tự làm thay đổi spin khi contactOffset thực vẫn giữ nguyên. Nếu UI cho chọn TÂM đầu cơ, phải chuyển C→D qua mô hình tip curvature có nguồn; khi đó contactOffset mới có thể đổi theo hình học. Không tự đổi độ xoáy chỉ vì vòng đầu cơ vẽ to hơn.
+8. Đổi maxPhysicalRadiusRatio0.8→0.5 sẽ thay đổi các bài đã hiệu chỉnh. Phải version hóa dữ liệu, giữ offset vật lí cũ khi đọc, đánh dấu ngoài miền mới, và nghiệm thu lại có chủ đích. Không âm thầm đổi tất cả bài và làm kết quả cũ mất tái lập.
+
+Nguồn tham khảo vật lí (cần hiệu chỉnh cho bàn carom, không thay thế thực nghiệm):
+- https://drdavepoolinfo.com/faq/cue-tip/height/ — mốc contact0.4R cho natural roll; mốc giới hạn tạch tham khảo0.5R.
+- https://drdavepoolinfo.com/FAQ/cue-tip/size-and-shape/ — kích thước/độ cong tip ảnh hưởng quan hệ tâm đầu cơ và điểm tiếp xúc.
+- https://pooltool.readthedocs.io/en/stable/_modules/pooltool/ptmath/utils.html#tip_contact_offset — tách cue-center offset và ball contact offset, trong mô hình tip hình học được công bố.
+
+V. LỆNH THỰC HIỆN CHO GEMINI
+Tiếp tục từ HEAD7e1652992e1af4ebb4794b18dcbd03c0e2777fe1 trên branch riêng. Hoàn thành:
+P0 sửa drawBack>=+0.005 thành kiểm ngưỡng âm đúng, bổ sung negative tests quanh0; đồng bộ cự ly/đoạn đo KT01/KT02 với nội dung.
+P1 thay ChoiceChip độ dày bằng Slider7nấc1/8..7/8, ±, trái/phải riêng,8/8riêng; truyền fraction thật vào engine; bảo toàn bài1/3,2/3 cũ.
+P2 triển khai hình bi61.5mm, tip11.5–12mm và thang4mức với quy ước công khai. Tách contactOffset và cue-center; định nghĩa giới hạn/curvature; không lấy đường kính tip làm thẳng offset spin.
+P3 migration, kiểm lại15bài và test UI/geometry/engine/storage, cập nhật log đúng dung sai, giao APK có liên kết tải, SHA commit và SHA256.
+Giữ kiến trúc engine/camera/storage đã sửa; không chèn hệ số dịch quỹ đạo để làm UI khớp.
+
+Giới hạn review: chưa chạy Flutter/Dart hay cài APK; đã đọc log do tác giả cung cấp. Không có thay đổi nào được đẩy vào repo trong lượt này.

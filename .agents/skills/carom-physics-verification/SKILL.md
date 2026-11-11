@@ -26,7 +26,8 @@ Skill này quy định chuẩn mực kỹ thuật bắt buộc khi phát triển
 
 4. **Nghiệm Thu Bài Học Mẫu Qua Fixture Kỹ Thuật Độc Lập:**
    - Sử dụng `LessonPhysicsVerificationFixture` kiểm chứng đầy đủ các tiêu chí: thứ tự chạm bi, dấu má chạm (+1/-1), fraction thực tế ($\pm 0.05$), số băng trước carom, chuỗi thành băng, số băng bi vàng, chuyển động sau va chạm có dấu, và gom bi.
-   - Đo đạc chuyển động sau va chạm có dấu: vector sau chạm Bi 1 $s_{\parallel} = \Delta\vec{p}_{\text{post}} \cdot \hat{u}_{\text{in}}$, bắt buộc trô lùi (`drawBack`: $s_{\parallel} < -0.005\text{m}$) và đẩy tới (`pushForward`: $s_{\parallel} > 0.005\text{m}$). Cú đánh forward-only bắt buộc FAIL fixture trô KT-01.
+   - Đo đạc chuyển động sau va chạm có dấu: vector sau chạm Bi 1 $s_{\parallel} = \Delta\vec{p}_{\text{post}} \cdot \hat{u}_{\text{in}}$, bắt buộc trô lùi (`drawBack`: $s_{\parallel} \le -0.005\text{m}$) và đẩy tới (`pushForward`: $s_{\parallel} \ge 0.005\text{m}$). Cú đánh forward-only bắt buộc FAIL fixture trô KT-01. Ca kiểm thử biên $\{+0.004, 0.0, -0.004, -0.006\}\text{m}$ khẳng định duy nhất $-0.006\text{m}$ vượt qua điều kiện chiều trô.
+   - Lưu trạng thái chính xác trước va chạm (`primaryBallPositionAtCollision`, `primaryBallVelocityBefore`) trong `CollisionEvent` từ thời điểm va chạm giải tích CCD.
    - Strict Null-checks: Bất kỳ tiêu chí nào được bật trong Fixture mà kết quả thực tế là `null` hoặc thiếu số đo thì bắt buộc FAIL. Gom bi bắt buộc `gathersInZone == true`, nếu `null` hoặc `false` đều báo lỗi.
    - Không được nới rộng bán kính gom bi hay dung sai để gượng ép gán nhãn `isPhysicsVerified: true`. Phân biệt minh bạch hai mức chứng nhận: "Verified nội bộ mô hình 2.5D" (8 bài) và "Chưa kiểm chứng thực nghiệm / thiếu số băng mô tả" (7 bài).
 
@@ -41,12 +42,22 @@ Skill này quy định chuẩn mực kỹ thuật bắt buộc khi phát triển
    - File có `schemaVersion > currentSchemaVersion` chuyển sang chế độ Read-Only và tạo bản sao `.future_v{version}.bak`. Hàm `saveState` có Write Guard từ chối ghi đè, bảo toàn 100% bytes file gốc trên đĩa.
    - UI Read-Only Guard: Trạng thái UI (`HomeScreenState`) lưu giữ cờ `_isReadOnly` và giải thích lý do, từ chối mọi thao tác chỉnh sửa ở tầng giao diện và không thay đổi state hiển thị.
 
+7. **Sơ Đồ Chạm Trái 8 Phần & Điểm Mũi Cơ 4 Mức theo mm:**
+   - Slider rời rạc 7 nấc $k=1..7$ ($1/8 .. 7/8$, `divisions: 6`), nút `[-]`/`[+]` dịch đúng $1/8$, nút `Tràn mặt 8/8` riêng biệt có khôi phục độ dày và má trước đó.
+   - Góc cắt ngắm AimGeometry: $b = 2R(1 - f)$, $\theta = \arcsin(1 - f)$ ($4/8 \to 30^\circ$).
+   - Bảo toàn phân số bài cũ $1/3$ và $2/3$, hiển thị rõ nhãn gốc khi đọc.
+   - Bi Carom $2R = 61.5\text{mm}$, đầu cơ $11.5–12.0\text{mm}$ (mặc định $12.0\text{mm}$).
+   - Thang 4 mức quy ước: mỗi mức $0.125R = 3.84375\text{mm}$, biên an toàn tham khảo $r \le 0.50R = 15.375\text{mm}$.
+   - Ràng buộc hình tròn tiếp xúc: $x^2 + z^2 \le r_{\text{limit}}^2$.
+   - Mốc tham khảo Natural Roll $+12.30\text{mm}$. Vẽ vòng đầu cơ làm hình tham chiếu kích thước và chấm đỏ điểm tiếp xúc phân biệt.
+
 ## 2. Quy Trình Kiểm Thử Chuẩn
 
 Trước khi hoàn tất bất kỳ thay đổi nào liên quan tới vật lý, UI bàn hoặc bài học, luôn chạy:
 ```powershell
 flutter analyze
 flutter test test/physics_engine_test.dart
+flutter test test/slider_8ths_cue_4tiers_test.dart
 flutter test
 ```
-Tất cả 21 ca kiểm thử trong repo phải vượt qua (`21/21 PASS`, 0 warnings, 0 errors).
+Tất cả 32 ca kiểm thử trong repo phải vượt qua (`32/32 PASS`, 0 warnings, 0 errors).

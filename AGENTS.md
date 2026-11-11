@@ -31,3 +31,18 @@ Tài liệu này định nghĩa các quy tắc bất biến dành cho các AI Ag
 - **Write Guard Schema tương lai:** Khi gặp file có `schemaVersion > currentSchemaVersion`, ứng dụng phải tạo bản sao `.future_v{version}.bak` và chuyển sang chế độ Read-Only. Hàm `saveState` phải kiểm tra và từ chối ghi đè lên file trên đĩa để bảo toàn 100% bytes dữ liệu gốc.
 - **UI Read-Only Guard:** Trạng thái UI (`HomeScreenState`) phải lưu giữ cờ `_isReadOnly` và giải thích lý do; từ chối mọi thao tác chỉnh sửa ở tầng giao diện và không thay đổi state hiển thị khi không được phép ghi.
 - Callback lưu ghi chú trên UI phải thực hiện cập nhật duy nhất một lần và await kết quả lưu, không gọi lặp ghi đôi.
+
+## 5. Sơ Đồ Chạm Trái 8 Phần & Điểm Mũi Cơ 4 Mức Theo mm (`lib/models/billiard_specs.dart`, `lib/widgets/diagrams/`)
+- **Thanh trượt Độ dày 8 phần:**
+  + Slider rời rạc 7 nấc $k=1..7$ (`divisions: 6`), fraction $= k/8.0$, nhãn chính giữ phân số phần tám kết hợp tên rút gọn phụ ($2/8 (1/4)$, $4/8 (1/2)$, $6/8 (3/4)$).
+  + Nút `[-]` và `[+]` dịch chuyển đúng $1/8$.
+  + Điều khiển Má Trái / Má Phải độc lập: Đổi độ dày giữ má, đổi má giữ độ dày.
+  + Nút `Tràn mặt 8/8` riêng biệt: Khi bật/tắt phải lưu và khôi phục chính xác độ dày và má trước đó.
+  + Góc ngắm và khoảng lệch tâm tuân thủ hình học `AimGeometry`: $b = 2R(1 - f)$, $\theta = \arcsin(1 - f)$ ($4/8 \to 30^\circ$, không chia đều $45^\circ$).
+  + Bảo toàn dữ liệu cũ ($1/3, 2/3$): Không tự làm tròn khi build widget, hiển thị rõ "giá trị gốc".
+- **Điểm Mũi Cơ theo mm & Thang 4 mức:**
+  + Kích thước chuẩn: Bi Carom $2R = 61.5\text{mm}$ ($R = 30.75\text{mm}$). Đầu cơ $11.5, 11.75, 12.0\text{mm}$ (mặc định $12.0\text{mm}$).
+  + Quy ước 4 mức tính từ tâm trong vùng tham khảo an toàn tránh tạch cơ: $r \le 0.50R = 15.375\text{mm}$ (Dr. Dave Cue Tip Limit), mỗi mức ứng với $0.125R = 3.84375\text{mm}$.
+  + Ràng buộc hình tròn tiếp xúc: $x^2 + z^2 \le r_{\text{limit}}^2$. Khi vượt miền, điểm chạm được chiếu tròn về biên và UI cập nhật số mm thực tế đồng nhất.
+  + Mốc tham khảo Natural Roll (cơ nằm ngang): $z = +0.40R = +12.30\text{mm}$.
+  + Phân biệt rạch ròi: Vòng tròn đầu cơ là hình tham chiếu kích thước, chấm đỏ là điểm tiếp xúc thực tế trên mặt cầu. Đổi kích thước đầu cơ không tự ý làm đổi spin khi tọa độ tiếp xúc vật lý giữ nguyên.

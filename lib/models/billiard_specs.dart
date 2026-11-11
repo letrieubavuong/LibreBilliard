@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../physics/aim_geometry.dart';
 
 /// Chế độ hiển thị chung cho tất cả các sơ đồ Billiard (dùng lại ở Danh sách, Chi tiết, Máy tính, Flashcard)
 enum DiagramDisplayMode {
@@ -169,6 +170,37 @@ class BallContactSpec extends BilliardVisualSpec {
         description: description ?? 'Ngắm thẳng tâm bi chủ vào tâm bi mục tiêu (truyền 100% lực trực diện)',
       );
 
+  /// Preset phân số phần tám: k in 1..8 (k=8 là Tràn mặt)
+  factory BallContactSpec.eighths(
+    int k, {
+    ContactSide side = ContactSide.right,
+    String? description,
+  }) {
+    final clampedK = k.clamp(1, 8);
+    if (clampedK == 8) {
+      return BallContactSpec.full(description: description);
+    }
+    return BallContactSpec(
+      fraction: clampedK / 8.0,
+      side: side == ContactSide.center ? ContactSide.right : side,
+      description: description,
+    );
+  }
+
+  /// Nấc phần tám (k = 1..8) nếu độ dày trùng khớp lưới 1/8 .. 8/8 (dung sai 0.02).
+  /// Trả về null nếu là phân số khác (ví dụ 1/3, 2/3) hoặc số đo liên tục từ ngắm tự do.
+  int? get eighthsStep {
+    if (fraction >= 0.98) return 8;
+    for (int k = 1; k <= 7; k++) {
+      if ((fraction - (k / 8.0)).abs() < 0.02) return k;
+    }
+    return null;
+  }
+
+  /// Góc cắt lí tưởng theta = arcsin(1 - f) tính bằng độ (AimGeometry).
+  double get cutAngleDegrees =>
+      AimGeometry.cutAngleRadians(fraction) * 180.0 / math.pi;
+
   BallContactSpec copyWith({
     String? label,
     double? fraction,
@@ -186,7 +218,7 @@ class BallContactSpec extends BilliardVisualSpec {
         side != ContactSide.center &&
         fraction == null &&
         this.fraction >= 0.999) {
-      // Khi đang ở Tràn mặt mà người dùng bấm chọn Má Trái/Phải, chuyển về độ dày 3/4 mặc định
+      // Khi đang ở Tràn mặt mà người dùng bấm chọn Má Trái/Phải, chuyển về độ dày 6/8 (3/4) mặc định
       targetFraction = 0.75;
     }
 
@@ -201,13 +233,15 @@ class BallContactSpec extends BilliardVisualSpec {
 
   static String formatFractionLabel(double f) {
     if (f >= 0.98) return 'Tràn mặt';
-    if ((f - 0.125).abs() < 0.03) return '1/8 trái';
-    if ((f - 0.25).abs() < 0.03) return '1/4 trái';
-    if ((f - (1.0 / 3.0)).abs() < 0.035) return '1/3 trái';
-    if ((f - 0.50).abs() < 0.035) return '1/2 trái';
-    if ((f - (2.0 / 3.0)).abs() < 0.035) return '2/3 trái';
-    if ((f - 0.75).abs() < 0.035) return '3/4 trái';
-    if ((f - 0.875).abs() < 0.03) return '7/8 trái';
+    if ((f - 0.125).abs() < 0.02) return '1/8 trái';
+    if ((f - 0.25).abs() < 0.02) return '2/8 (1/4) trái';
+    if ((f - (1.0 / 3.0)).abs() < 0.02) return '1/3 trái';
+    if ((f - 0.375).abs() < 0.02) return '3/8 trái';
+    if ((f - 0.50).abs() < 0.02) return '4/8 (1/2) trái';
+    if ((f - 0.625).abs() < 0.02) return '5/8 trái';
+    if ((f - (2.0 / 3.0)).abs() < 0.02) return '2/3 trái';
+    if ((f - 0.75).abs() < 0.02) return '6/8 (3/4) trái';
+    if ((f - 0.875).abs() < 0.02) return '7/8 trái';
     return '${(f * 100).round()}% trái';
   }
 
@@ -249,13 +283,41 @@ class BallContactSpec extends BilliardVisualSpec {
 /// - Ngang (`horizontalEffet`): từ -4 (4 ép-phê trái) đến +4 (4 ép-phê phải)
 /// - Dọc (`verticalHeight`): từ -4 (6h tối đa - Rétro sâu) đến +4 (12h tối đa - Coulé cao)
 ///
-/// Miền hợp lệ tròn (Circular Valid Domain):
-/// - Mọi giá trị `(horizontalEffet, verticalHeight)` đều được chiếu (project) vào hình tròn
-///   `sqrt(h^2 + v^2) <= maxTips (4.0)` ngay khi khởi tạo, tương ứng với giới hạn vật lý `r <= 0.80 * R`.
-/// - Giá trị lưu trong model, nhãn hiển thị, chấm đỏ trên UI và thông số truyền vào physics engine hoàn toàn đồng nhất.
+/// Thang đo kép chuẩn xác (SI & Quy ước 4 mức):
+/// - Đường kính bi Carom chuẩn: `2R = 61.5 mm` (bán kính `R = 30.75 mm`).
+/// - Đường kính đầu cơ: tùy chọn 11.5, 11.75, 12.0 mm (mặc định 12.0 mm).
+/// - Giới hạn tham khảo an toàn tránh tạch cơ: `r <= 0.50 * R = 15.375 mm`.
+/// - Thang 4 mức quy ước: mỗi mức ứng với `0.125 * R = 3.84375 mm`.
+/// - Mốc tham khảo Natural Roll (lăn tự nhiên khi cơ ngang): `z = +0.40 * R = +12.30 mm`.
+/// - Ràng buộc đĩa tròn tiếp xúc: `x^2 + z^2 <= r_limit^2`.
 class CueBallEffetSpec extends BilliardVisualSpec {
   static const double maxTips = 4.0;
   static const double maxPhysicalRadiusRatio = 0.80;
+
+  /// Đường kính viên bi Carom tiêu chuẩn: 61.5 mm
+  static const double ballDiameterMm = 61.5;
+
+  /// Bán kính viên bi Carom tiêu chuẩn: R = 30.75 mm
+  static const double ballRadiusMm = 30.75;
+
+  /// Đường kính đầu cơ mặc định: 12.0 mm (chiếm ~19.51% đường kính viên bi)
+  static const double defaultTipDiameterMm = 12.0;
+
+  /// Các kích thước đầu cơ Carom phổ biến: 11.5, 11.75, 12.0 mm
+  static const List<double> supportedTipDiametersMm = [11.5, 11.75, 12.0];
+
+  /// Giới hạn tham khảo an toàn tránh tạch cơ (Dr. Dave Cue Tip / Miscuing Limit): 0.50 * R = 15.375 mm
+  static const double referenceMaxRatio = 0.50;
+
+  /// Giới hạn vật lý cực đại mở rộng (chế độ nghiên cứu / tương thích legacy): 0.80 * R = 24.60 mm
+  static const double extendedMaxRatio = 0.80;
+
+  /// Bước dịch chuyển mỗi tầng / mức theo quy ước 4 mức: 0.125 * R = 3.84375 mm
+  static const double tierStepMm = 3.84375;
+
+  /// Mốc tham khảo Natural Roll (lăn tự nhiên trong mô hình cơ ngang lí tưởng): z = +0.40 * R = +12.30 mm
+  static const double naturalRollZMm = 12.30;
+  static const double naturalRollZRatio = 0.40;
 
   /// Mức ép-phê ngang: âm là Trái, dương là Phải (nằm trong đĩa tròn bán kính 4.0).
   final double horizontalEffet;
@@ -263,10 +325,14 @@ class CueBallEffetSpec extends BilliardVisualSpec {
   /// Độ cao đầu cơ: dương là Cao/Cu-lê (12h), âm là Thấp/Trô (6h) (nằm trong đĩa tròn bán kính 4.0).
   final double verticalHeight;
 
+  /// Đường kính đầu cơ (mm)
+  final double tipDiameterMm;
+
   const CueBallEffetSpec._({
     required super.label,
     required this.horizontalEffet,
     required this.verticalHeight,
+    this.tipDiameterMm = defaultTipDiameterMm,
     super.description,
   });
 
@@ -274,6 +340,7 @@ class CueBallEffetSpec extends BilliardVisualSpec {
     String? label,
     required double horizontalEffet,
     required double verticalHeight,
+    double tipDiameterMm = defaultTipDiameterMm,
     String? description,
   }) {
     final clamped = clampTipsToCircle(horizontalEffet, verticalHeight);
@@ -281,6 +348,7 @@ class CueBallEffetSpec extends BilliardVisualSpec {
       label: label ?? _buildAutoLabel(clamped.h, clamped.v),
       horizontalEffet: clamped.h,
       verticalHeight: clamped.v,
+      tipDiameterMm: tipDiameterMm,
       description: description,
     );
   }
@@ -312,10 +380,38 @@ class CueBallEffetSpec extends BilliardVisualSpec {
         (verticalHeight / maxTips) * maxPhysicalRadiusRatio,
       );
 
+  /// Tọa độ tiếp xúc vật lý X (mm) từ tâm bi (-R .. +R). Âm là Trái, Dương là Phải.
+  double get contactOffsetXMm => physicalTipOffsetRatio.dx * ballRadiusMm;
+
+  /// Tọa độ tiếp xúc vật lý Z (mm) từ tâm bi (-R .. +R). Dương là Cao (12h), Âm là Thấp (6h).
+  double get contactOffsetZMm => physicalTipOffsetRatio.dy * ballRadiusMm;
+
+  /// Khoảng cách từ tâm bi tới điểm tiếp xúc r = sqrt(x^2 + z^2) tính bằng mm.
+  double get contactRadiusMm => math.sqrt(
+        contactOffsetXMm * contactOffsetXMm +
+            contactOffsetZMm * contactOffsetZMm,
+      );
+
+  /// Tỷ lệ bán kính tiếp xúc so với bán kính bi: r / R.
+  double get contactRadiusRatio => contactRadiusMm / ballRadiusMm;
+
+  /// Nấc / tầng ngang gần nhất theo thang 4 mức quy ước (-4..+4, tâm 0).
+  int get nearestHorizontalTier =>
+      (contactOffsetXMm / tierStepMm).round().clamp(-4, 4);
+
+  /// Nấc / tầng dọc gần nhất theo thang 4 mức quy ước (-4..+4, tâm 0).
+  int get nearestVerticalTier =>
+      (contactOffsetZMm / tierStepMm).round().clamp(-4, 4);
+
+  /// Điểm chạm có nằm ngoài miền tham khảo an toàn (r > 0.50 * R = 15.375 mm) hay không.
+  bool get isOutsideReferenceSafetyZone =>
+      contactRadiusMm > (referenceMaxRatio * ballRadiusMm + 0.05);
+
   /// Khởi tạo từ mức Cao/Thấp và số mũi Ép-phê (tự động chiếu vào miền tròn hợp lệ).
   factory CueBallEffetSpec.fromTips({
     required double horizontalTips,
     required double verticalTips,
+    double tipDiameterMm = defaultTipDiameterMm,
     String? customLabel,
     String? description,
   }) {
@@ -324,6 +420,64 @@ class CueBallEffetSpec extends BilliardVisualSpec {
       label: customLabel ?? _buildAutoLabel(clamped.h, clamped.v),
       horizontalEffet: clamped.h,
       verticalHeight: clamped.v,
+      tipDiameterMm: tipDiameterMm,
+      description: description,
+    );
+  }
+
+  /// Khởi tạo từ 4 tầng / mức quy ước:
+  /// - `horizontalTier`: -4..+4 (mỗi mức 3.84375 mm = 0.125 R)
+  /// - `verticalTier`: -4..+4 (mỗi mức 3.84375 mm = 0.125 R)
+  /// Ràng buộc đĩa tròn an toàn r <= 0.50 * R (15.375 mm).
+  factory CueBallEffetSpec.fromTiers({
+    required int horizontalTier,
+    required int verticalTier,
+    double tipDiameterMm = defaultTipDiameterMm,
+    String? customLabel,
+    String? description,
+  }) {
+    final rawXMm = horizontalTier.clamp(-4, 4) * tierStepMm;
+    final rawZMm = verticalTier.clamp(-4, 4) * tierStepMm;
+    return CueBallEffetSpec.fromMm(
+      xMm: rawXMm,
+      zMm: rawZMm,
+      tipDiameterMm: tipDiameterMm,
+      customLabel: customLabel,
+      description: description,
+    );
+  }
+
+  /// Khởi tạo trực tiếp từ tọa độ mm tiếp xúc vật lý trên mặt cầu:
+  /// - `xMm`: trục ngang (-15.375 .. +15.375 mm trong chuẩn an toàn)
+  /// - `zMm`: trục đứng (-15.375 .. +15.375 mm trong chuẩn an toàn)
+  /// Ràng buộc đĩa tròn x^2 + z^2 <= (r_limit)^2.
+  factory CueBallEffetSpec.fromMm({
+    required double xMm,
+    required double zMm,
+    double tipDiameterMm = defaultTipDiameterMm,
+    bool allowExtendedRange = false,
+    String? customLabel,
+    String? description,
+  }) {
+    final maxAllowedR =
+        (allowExtendedRange ? extendedMaxRatio : referenceMaxRatio) * ballRadiusMm;
+    final dist = math.sqrt(xMm * xMm + zMm * zMm);
+    double clampedX = xMm;
+    double clampedZ = zMm;
+    if (dist > maxAllowedR && dist > 1e-9) {
+      final scale = maxAllowedR / dist;
+      clampedX = xMm * scale;
+      clampedZ = zMm * scale;
+    }
+
+    final h = (clampedX / (ballRadiusMm * maxPhysicalRadiusRatio)) * maxTips;
+    final v = (clampedZ / (ballRadiusMm * maxPhysicalRadiusRatio)) * maxTips;
+
+    return CueBallEffetSpec._(
+      label: customLabel ?? _buildMmLabel(clampedX, clampedZ),
+      horizontalEffet: h,
+      verticalHeight: v,
+      tipDiameterMm: tipDiameterMm,
       description: description,
     );
   }
@@ -331,6 +485,7 @@ class CueBallEffetSpec extends BilliardVisualSpec {
   CueBallEffetSpec copyWith({
     double? horizontalEffet,
     double? verticalHeight,
+    double? tipDiameterMm,
     String? label,
     String? description,
   }) {
@@ -342,8 +497,30 @@ class CueBallEffetSpec extends BilliardVisualSpec {
       label: label ?? _buildAutoLabel(clamped.h, clamped.v),
       horizontalEffet: clamped.h,
       verticalHeight: clamped.v,
+      tipDiameterMm: tipDiameterMm ?? this.tipDiameterMm,
       description: description ?? this.description,
     );
+  }
+
+  static String _buildMmLabel(double xMm, double zMm) {
+    String vPart;
+    if (zMm >= 6.0) {
+      vPart = 'Cu-lê (+${zMm.toStringAsFixed(1)}mm)';
+    } else if (zMm >= 1.5) {
+      vPart = 'Trên tâm (+${zMm.toStringAsFixed(1)}mm)';
+    } else if (zMm <= -6.0) {
+      vPart = 'Trô sâu (${zMm.toStringAsFixed(1)}mm)';
+    } else if (zMm <= -1.5) {
+      vPart = 'Dưới tâm (${zMm.toStringAsFixed(1)}mm)';
+    } else {
+      vPart = 'Tâm bi (0mm)';
+    }
+
+    if (xMm.abs() < 0.8) {
+      return '$vPart • Không ép-phê';
+    }
+    final side = xMm > 0 ? 'Phải' : 'Trái';
+    return '$vPart • ${xMm.abs().toStringAsFixed(1)}mm $side';
   }
 
   static String _buildAutoLabel(double h, double v) {
@@ -373,6 +550,7 @@ class CueBallEffetSpec extends BilliardVisualSpec {
         'label': label,
         'horizontalEffet': horizontalEffet,
         'verticalHeight': verticalHeight,
+        'tipDiameterMm': tipDiameterMm,
         'description': description,
       };
 
@@ -381,6 +559,7 @@ class CueBallEffetSpec extends BilliardVisualSpec {
       label: json['label'] as String?,
       horizontalEffet: (json['horizontalEffet'] as num?)?.toDouble() ?? 0.0,
       verticalHeight: (json['verticalHeight'] as num?)?.toDouble() ?? 0.0,
+      tipDiameterMm: (json['tipDiameterMm'] as num?)?.toDouble() ?? defaultTipDiameterMm,
       description: json['description'] as String?,
     );
   }
@@ -391,12 +570,14 @@ class CueBallEffetSpec extends BilliardVisualSpec {
       (other is CueBallEffetSpec &&
           (horizontalEffet - other.horizontalEffet).abs() < 1e-9 &&
           (verticalHeight - other.verticalHeight).abs() < 1e-9 &&
+          (tipDiameterMm - other.tipDiameterMm).abs() < 1e-6 &&
           label == other.label);
 
   @override
   int get hashCode => Object.hash(
         horizontalEffet.toStringAsFixed(6),
         verticalHeight.toStringAsFixed(6),
+        tipDiameterMm.toStringAsFixed(2),
         label,
       );
 }

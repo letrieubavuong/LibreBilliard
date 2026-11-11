@@ -45,6 +45,15 @@ class CollisionEvent {
   /// `+1` tương ứng má trái (`ContactSide.left`), `-1` tương ứng má phải (`ContactSide.right`), `0` trực diện.
   final double? effectiveLateralSign;
 
+  /// Tọa độ tâm viên bi thứ nhất tại thời điểm va chạm (m).
+  final Vec2? primaryBallPositionAtCollision;
+
+  /// Vận tốc tịnh tiến của viên bi thứ nhất ngay trước va chạm (m/s).
+  final Vec2? primaryBallVelocityBefore;
+
+  /// Vận tốc tịnh tiến của viên bi thứ hai ngay trước va chạm (m/s) (đối với `ballBall`).
+  final Vec2? secondaryBallVelocityBefore;
+
   const CollisionEvent({
     required this.timestamp,
     required this.type,
@@ -57,6 +66,9 @@ class CollisionEvent {
     this.centerDistanceMeters,
     this.effectiveContactFraction,
     this.effectiveLateralSign,
+    this.primaryBallPositionAtCollision,
+    this.primaryBallVelocityBefore,
+    this.secondaryBallVelocityBefore,
   });
 
   bool involvesBall(BallId id) => primaryBall == id || secondaryBall == id;
@@ -459,6 +471,9 @@ class CollisionPhysics {
           centerDistanceMeters: dist,
           effectiveContactFraction: effectiveFraction,
           effectiveLateralSign: effectiveLateralSign,
+          primaryBallPositionAtCollision: p1,
+          primaryBallVelocityBefore: ball1.velocity,
+          secondaryBallVelocityBefore: ball2.velocity,
         ),
       );
     }
@@ -532,6 +547,9 @@ class CollisionPhysics {
         centerDistanceMeters: dist,
         effectiveContactFraction: effectiveFraction,
         effectiveLateralSign: effectiveLateralSign,
+        primaryBallPositionAtCollision: p1,
+        primaryBallVelocityBefore: ball1.velocity,
+        secondaryBallVelocityBefore: ball2.velocity,
       ),
     );
   }
