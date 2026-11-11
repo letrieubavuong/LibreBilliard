@@ -217,3 +217,4 @@ class Quat {
   @override
   int get hashCode => Object.hash(w, x, y, z);
 }
+

@@ -1,5 +1,8 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:xavier_billiard_libre/main.dart';
+import 'package:xavier_billiard_libre/data/notebook_storage.dart';
+import 'package:xavier_billiard_libre/screens/home_screen.dart';
 import 'package:xavier_billiard_libre/widgets/diagrams/ball_contact_diagram.dart';
 import 'package:xavier_billiard_libre/widgets/diagrams/carom_table_diagram.dart';
 import 'package:xavier_billiard_libre/widgets/diagrams/cue_ball_effet_diagram.dart';
@@ -7,7 +10,16 @@ import 'package:xavier_billiard_libre/widgets/diagrams/cue_ball_effet_diagram.da
 void main() {
   testWidgets('Xavier Billiard Libre renders Bottom Bar & reusable diagrams',
       (WidgetTester tester) async {
-    await tester.pumpWidget(const XavierBilliardLibreApp());
+    final tempDir = Directory.systemTemp.createTempSync('xavier_widget_test_');
+    final storage = NotebookStorage(
+      overrideFile: File('${tempDir.path}/widget_test_notebook.json'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeScreen(storage: storage),
+      ),
+    );
 
     // Kiểm tra các tab trên Bottom Bar
     expect(find.text('Kĩ thuật'), findsWidgets);
@@ -30,5 +42,7 @@ void main() {
     await tester.tap(find.text('Bộ số'));
     await tester.pumpAndSettle();
     expect(find.textContaining('MÁY TÍNH BỘ SỐ'), findsOneWidget);
+
+    tempDir.deleteSync(recursive: true);
   });
 }

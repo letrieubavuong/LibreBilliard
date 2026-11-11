@@ -601,3 +601,4 @@ class _CandidateCollision {
       : isBallBall = false,
         ballB = null;
 }
+

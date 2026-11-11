@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../data/notebook_storage.dart';
 import '../data/sample_lessons.dart';
 import '../models/billiard_lesson.dart';
 import '../widgets/diagrams/base_billiard_diagram.dart';
@@ -9,7 +10,12 @@ import 'flashcard_drill_screen.dart';
 import 'lesson_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final NotebookStorage storage;
+
+  const HomeScreen({
+    super.key,
+    this.storage = const NotebookStorage(),
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -20,9 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   String? _selectedSubCategory;
 
-  late final List<BilliardLesson> _allLessons = [
-    ...SampleLessonsRepository.lessons,
-  ];
+  final List<BilliardLesson> _customLessons = [];
   int _customLessonCounter = 1;
 
   // Lưu trạng thái Bookmark, Số lượt tập luyện và Ghi chú cá nhân
@@ -36,6 +40,48 @@ class _HomeScreenState extends State<HomeScreen> {
     'kt-01': 'Cầu tay đặt sát 10cm, dừng ngọn cơ ngay sau khi chạm bi chủ.',
   };
 
+  List<BilliardLesson> get _allLessons => [
+        ..._customLessons,
+        ...SampleLessonsRepository.lessons,
+      ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPersistedNotebookState();
+  }
+
+  Future<void> _loadPersistedNotebookState() async {
+    final loaded = await widget.storage.loadState();
+    if (!mounted) return;
+    setState(() {
+      _bookmarkedIds
+        ..clear()
+        ..addAll(loaded.bookmarkedIds);
+      _practiceCounts
+        ..clear()
+        ..addAll(loaded.practiceCounts);
+      _personalNotes
+        ..clear()
+        ..addAll(loaded.personalNotes);
+      _customLessons
+        ..clear()
+        ..addAll(loaded.customLessons);
+      _customLessonCounter = loaded.customLessonCounter;
+    });
+  }
+
+  Future<void> _persistCurrentNotebookState() async {
+    final snapshot = NotebookPersistedState(
+      bookmarkedIds: Set<String>.from(_bookmarkedIds),
+      practiceCounts: Map<String, int>.from(_practiceCounts),
+      personalNotes: Map<String, String>.from(_personalNotes),
+      customLessons: List<BilliardLesson>.from(_customLessons),
+      customLessonCounter: _customLessonCounter,
+    );
+    await widget.storage.saveState(snapshot);
+  }
+
   void _toggleBookmark(String id) {
     setState(() {
       if (_bookmarkedIds.contains(id)) {
@@ -44,12 +90,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _bookmarkedIds.add(id);
       }
     });
+    _persistCurrentNotebookState();
   }
 
   void _incrementPractice(String id) {
     setState(() {
       _practiceCounts[id] = (_practiceCounts[id] ?? 0) + 1;
     });
+    _persistCurrentNotebookState();
   }
 
   void _savePersonalNote(String id, String note) {
@@ -60,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _personalNotes[id] = note;
       }
     });
+    _persistCurrentNotebookState();
   }
 
   void _openLessonDetail(BilliardLesson lesson) {
@@ -100,15 +149,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (created != null) {
       setState(() {
-        _allLessons.insert(0, created);
+        _customLessons.insert(0, created);
         _bookmarkedIds.add(created.id);
         _customLessonCounter++;
       });
+      await _persistCurrentNotebookState();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Đã lưu "${created.title}" vào Sổ tay & ${created.category.title}!'),
+              'Đã lưu "${created.title}" vào Sổ tay & ${created.category.title}!',
+            ),
           ),
         );
       }
@@ -221,11 +272,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
       children: [
-        // Thanh tìm kiếm nhanh
         TextField(
           onChanged: (v) => setState(() => _searchQuery = v),
           decoration: InputDecoration(
-            hintText: 'Tìm trong ${category.title} (VD: Rétro, Amery, Bộ 50...)',
+            hintText:
+                'Tìm trong ${category.title} (VD: Rétro, Amery, Bộ 50...)',
             prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
             fillColor: BilliardPalette.cardBackground,
@@ -241,8 +292,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-
-        // Bộ lọc chuyên mục con (Sub-category chips)
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -271,12 +320,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 14),
-
-        // Nếu đang ở tab Bộ số, hiển thị thêm Máy tính Bộ số tương tác
         if (category == LessonCategory.system)
           const DiamondSystemCalculatorCard(),
-
-        // Danh sách các bài học (mỗi LessonCard dùng lại các sơ đồ kế thừa ở chế độ Thumbnail)
         ...filtered.map((lesson) {
           return LessonCard(
             lesson: lesson,
@@ -300,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 84),
       children: [
-        // Thống kê luyện tập + Nút mở nhanh Đố Hình Bi & Tự xếp bi
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -337,18 +381,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: FilledButton.tonalIcon(
                       onPressed: () => _openFlashcardDrills(_allLessons),
                       icon: const Icon(Icons.quiz_outlined, size: 18),
-                      label: const Text('Đố hình bi (Quiz)',
-                          style: TextStyle(fontSize: 12.5)),
+                      label: const Text(
+                        'Đố hình bi (Quiz)',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _openCustomPositionBuilder,
-                      icon: const Icon(Icons.edit_location_alt_outlined,
-                          size: 18),
-                      label: const Text('Tự xếp hình bi',
-                          style: TextStyle(fontSize: 12.5)),
+                      icon: const Icon(
+                        Icons.edit_location_alt_outlined,
+                        size: 18,
+                      ),
+                      label: const Text(
+                        'Tự xếp hình bi',
+                        style: TextStyle(fontSize: 12.5),
+                      ),
                     ),
                   ),
                 ],
@@ -357,11 +407,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 16),
-
-        // Phòng Lab thử nghiệm Chạm trái & Ép-phê (tái sử dụng các sơ đồ kế thừa ở chế độ Interactive)
         const ShotSandboxCard(),
         const SizedBox(height: 18),
-
         const Text(
           'HÌNH BI ĐÃ LƯU TRONG SỔ TAY',
           style: TextStyle(

@@ -7,3 +7,4 @@ export 'shot_input.dart';
 export 'simulation_result.dart';
 export 'table_config.dart';
 export 'vector_math.dart';
+

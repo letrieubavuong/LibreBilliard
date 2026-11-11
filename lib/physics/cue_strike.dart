@@ -38,9 +38,9 @@ class CueStrikePhysics {
     final zTip = tipMeters.y; // Lệch dọc (+: 12h Cu-lê, -: 6h Trô)
 
     final rPerpSq = xTip * xTip + zTip * zTip;
-    final inertiaFactor = 1.0 + (2.5 * rPerpSq) / (r * r);
+    final inertiaFactor = 1.0 + (0.35 * rPerpSq) / (r * r);
 
-    // Xung lượng J từ va chạm cơ - bi chủ
+    // Xung lượng J từ va chạm cơ - bi chủ: Delta_v = J / m, Delta_omega = I^-1 (r x J)
     final impulseMag = (mc * m * (1.0 + tipRestitution) * input.cueSpeed) /
         (m + mc * inertiaFactor);
 
