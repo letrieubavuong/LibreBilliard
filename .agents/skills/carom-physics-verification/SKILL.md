@@ -51,13 +51,19 @@ Skill này quy định chuẩn mực kỹ thuật bắt buộc khi phát triển
    - Ràng buộc hình tròn tiếp xúc: $x^2 + z^2 \le r_{\text{limit}}^2$.
    - Mốc tham khảo Natural Roll $+12.30\text{mm}$. Vẽ vòng đầu cơ làm hình tham chiếu kích thước và chấm đỏ điểm tiếp xúc phân biệt.
 
+8. **Kiểm Chứng Độc Lập Thế Bi Kéo Về (Rappel de Base) & Ràng Buộc Băng Chặt Chẽ:**
+   - **Đo đạc lưới Cadre chuẩn:** Bàn trong tài liệu cổ điển Pháp (Xavier Gretillat / Laurent Guénet) sử dụng lưới bàn Cadre 47/2 (chia 3 cadre theo chiều rộng $W/3$, vạch ngang cách băng $74\text{cm}$). Tọa độ bi phải được đối chiếu trực tiếp trên hệ lưới này.
+   - **Động học tiếp tuyến vs Trô lùi:** Trong cú trô có góc cắt ($f = 2/3$, $\theta = 19.47^\circ$), vận tốc tiếp tuyến $v_t = \frac{1}{3}v_0$ vuông góc với pháp tuyến va chạm $\hat{n}$. Hướng ngắm của cơ thủ và phương nối Bi 2 $\to$ Bi 3 phải thẳng hàng đối xứng $180^\circ$ để lực trô lùi kéo bi chủ đi thẳng tắp về Bi 3, không bị văng ngang.
+   - **Ràng buộc `maxCushionsBeforeCarom: 0`:** Cú đánh trô kéo về cơ bản nghiệm thu khắt khe qua `maxCushionsBeforeCarom: 0`. Tuyệt đối không cho phép bi chủ va chạm bất kỳ băng nào trước khi chạm Bi 3 (`cushionCountBeforeCarom == 0`).
+   - **Đầy đủ điều khiển UI:** Giữ nguyên độ dày $2/3$ qua nút chọn nhanh $1/3$, $1/2$, $2/3$ độc lập với slider 8 phần; cho phép tinh chỉnh liên tục tốc độ ngọn cơ $v_{\text{cue}}$ theo $\text{m/s}$ và độ sâu mũi cơ theo $\text{mm}$.
+
 ## 2. Quy Trình Kiểm Thử Chuẩn
 
 Trước khi hoàn tất bất kỳ thay đổi nào liên quan tới vật lý, UI bàn hoặc bài học, luôn chạy:
 ```powershell
 flutter analyze
 flutter test test/physics_engine_test.dart
-flutter test test/slider_8ths_cue_4tiers_test.dart
+flutter test test/rappel_2_3_survey_test.dart
 flutter test
 ```
-Tất cả 32 ca kiểm thử trong repo phải vượt qua (`32/32 PASS`, 0 warnings, 0 errors).
+Tất cả các ca kiểm thử trong repo phải vượt qua (`100% PASS`, 0 warnings, 0 errors).
