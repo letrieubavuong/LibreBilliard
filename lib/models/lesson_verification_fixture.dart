@@ -49,6 +49,10 @@ class LessonPhysicsVerificationFixture {
   /// Số băng tối thiểu bi chủ phải đập trước khi chạm viên bi mục tiêu thứ hai (carom).
   final int minCushionsBeforeCarom;
 
+  /// Số băng tối đa bi chủ được phép đập trước khi chạm viên bi mục tiêu thứ hai (carom).
+  /// Ví dụ: 0 cho các cú trô lùi thẳng trực tiếp (retrait direct / rappel de base) nghiêm cấm chạm băng.
+  final int? maxCushionsBeforeCarom;
+
   /// Chuỗi thành băng bi chủ dự kiến chạm trước khi carom (nếu có yêu cầu nghiêm ngặt).
   final List<CushionId>? expectedCueCushionSequence;
 
@@ -78,6 +82,7 @@ class LessonPhysicsVerificationFixture {
     this.maxCueBallPostImpactDisplacementMeters,
     this.minCueCushionsBeforeFirstBall = 0,
     this.minCushionsBeforeCarom = 0,
+    this.maxCushionsBeforeCarom,
     this.expectedCueCushionSequence,
     this.expectedYellowCushionBounces,
     this.expectedYellowCushionSequence,
@@ -168,6 +173,12 @@ class LessonPhysicsVerificationFixture {
     if (eval.cushionCountBeforeCarom < minCushionsBeforeCarom) {
       failures.add(
         'Số băng trước carom thiếu: yêu cầu >= $minCushionsBeforeCarom, thực tế ${eval.cushionCountBeforeCarom}',
+      );
+    }
+    if (maxCushionsBeforeCarom != null && eval.cushionCountBeforeCarom > maxCushionsBeforeCarom!) {
+      failures.add(
+        'Số băng bi chủ trước carom vượt quá giới hạn cho phép: yêu cầu <= $maxCushionsBeforeCarom, '
+        'thực tế ${eval.cushionCountBeforeCarom} (chuỗi băng chạm: $cueCushionsBeforeCaromList)',
       );
     }
 
@@ -552,13 +563,15 @@ class LessonPhysicsVerificationFixture {
       expectedContactFraction: 2.0 / 3.0,
       contactFractionTolerance: 0.05,
       expectedCuePostImpactMotion: CuePostImpactMotionType.drawBack,
-      minCueBallPostImpactDisplacementMeters: 0.15,
+      minCueBallPostImpactDisplacementMeters: 0.20,
       maxCueBallPostImpactDisplacementMeters: 0.85,
+      minCushionsBeforeCarom: 0,
+      maxCushionsBeforeCarom: 0, // Nghiêm cấm bi chủ chạm băng trước carom (lùi thẳng trực tiếp về bi 3)
       expectedYellowCushionSequence: [CushionId.shortNear],
       expectCarom: true,
       expectTargetZoneGather: true,
       notes:
-          'Trô kéo về cơ bản 2/3 bi (Rappel de base): Bi 2 chạy ~1.8L (gần 2 chiều dài bàn), Bi 1 trô lùi giật xuống phải gom sát Bi 3.',
+          'Trô kéo về cơ bản 2/3 bi (Rappel de base): Bi 2 chạy ~1.7L (gần 2 chiều dài bàn), Bi 1 trô lùi thẳng trực tiếp về gom sát Bi 3 không chạm băng.',
     ),
   };
 }

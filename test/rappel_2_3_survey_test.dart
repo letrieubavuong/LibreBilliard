@@ -11,14 +11,14 @@ void main() {
     const config = TableConfig.standardCarom;
     const engine = CaromPhysicsEngine(config: config);
 
-    // 1. Tọa độ ước lượng từ hình ảnh gốc (media_1794403626708_8b299f8b.png)
+    // 1. Tọa độ đo đạc chuẩn xác từ lưới pixel và cadre sách gốc (media_1794403626708_8b299f8b.png)
     // Hệ Diamond:
     // Bi 2 (Object 1 - Vàng): X = 6.000, Y = 2.6667
-    // Bi 1 (Cue - Trắng): X = 6.567, Y = 2.493
-    // Bi 3 (Object 2 - Đỏ): X = 7.710, Y = 3.644
-    final cuePosM = config.diamondToMeters(const Vec2(6.567, 2.493));
+    // Bi 1 (Cue - Trắng): X = 6.490, Y = 2.560
+    // Bi 3 (Object 2 - Đỏ): X = 7.710, Y = 3.650
+    final cuePosM = config.diamondToMeters(const Vec2(6.490, 2.560));
     final obj1PosM = config.diamondToMeters(const Vec2(6.000, 2.6667));
-    final obj2PosM = config.diamondToMeters(const Vec2(7.710, 3.644));
+    final obj2PosM = config.diamondToMeters(const Vec2(7.710, 3.650));
 
     const fraction = 2.0 / 3.0;
     const lateralSign = -1.0; // Má phải (-1.0) theo chuẩn đối chiếu hình học sách
@@ -58,12 +58,18 @@ void main() {
 
     // Sắp xếp tìm ca tối ưu:
     // 1. Cả 5 tiêu chí allPassed == true
-    // 2. Độ chênh lệch quãng đường bi 2 s2 so với mục tiêu 2L (|s2/L - 1.85|) nhỏ nhất
+    // 1. AllPassed = true
+    // 2. Không chạm băng trước khi tới bi 3 (cueHitsCushionBeforeCarom == false)
     // 3. dMinCueToObj2 nhỏ nhất (tiếp xúc trực diện Bi 3)
+    // 4. Độ chênh lệch quãng đường bi 2 s2 so với mục tiêu 1.70L - 1.80L
     surveyRecords.sort((a, b) {
       final aPass = a['allPassed'] as bool;
       final bPass = b['allPassed'] as bool;
       if (aPass != bPass) return aPass ? -1 : 1;
+
+      final aNoCush = !(a['cueHitsCushionBeforeCarom'] as bool);
+      final bNoCush = !(b['cueHitsCushionBeforeCarom'] as bool);
+      if (aNoCush != bNoCush) return aNoCush ? -1 : 1;
 
       final aHitsBoth = (a['criteriaA'] as bool) && (a['criteriaB'] as bool);
       final bHitsBoth = (b['criteriaA'] as bool) && (b['criteriaB'] as bool);
@@ -131,13 +137,17 @@ void main() {
       final bPass = b['allPassed'] as bool;
       if (aPass != bPass) return aPass ? -1 : 1;
 
+      final aNoCush = !(a['cueHitsCushionBeforeCarom'] as bool);
+      final bNoCush = !(b['cueHitsCushionBeforeCarom'] as bool);
+      if (aNoCush != bNoCush) return aNoCush ? -1 : 1;
+
       final aHitsBoth = (a['criteriaA'] as bool) && (a['criteriaB'] as bool);
       final bHitsBoth = (b['criteriaA'] as bool) && (b['criteriaB'] as bool);
       if (aHitsBoth != bHitsBoth) return aHitsBoth ? -1 : 1;
 
-      // Ưu tiên s2 gần 1.80L - 1.85L
-      final aS2Diff = ((a['ball2PathLengthOverL'] as double) - 1.80).abs();
-      final bS2Diff = ((b['ball2PathLengthOverL'] as double) - 1.80).abs();
+      // Ưu tiên s2 gần 1.70L - 1.80L
+      final aS2Diff = ((a['ball2PathLengthOverL'] as double) - 1.75).abs();
+      final bS2Diff = ((b['ball2PathLengthOverL'] as double) - 1.75).abs();
       return aS2Diff.compareTo(bS2Diff);
     });
 
@@ -199,8 +209,8 @@ void main() {
       objectBall1Position: obj1PosM,
       objectBall2Position: obj2PosM,
       aimDirection: ghostAim.aimDirection,
-      cueSpeed: 2.70,
-      tipOffsetRatio: Vec2(0.0, -9.5 / (config.ballRadius * 1000.0)),
+      cueSpeed: 2.85,
+      tipOffsetRatio: Vec2(0.0, -14.5 / (config.ballRadius * 1000.0)),
       cueElevationRadians: 0.0,
       maxTipOffsetRatio: config.maxTipOffsetRatio,
     );
@@ -247,6 +257,7 @@ Map<String, dynamic> _runSingleSimulation({
 
   bool hitsCueToObj1 = false;
   bool hitsCueToObj2 = false;
+  bool cueHitsCushionBeforeCarom = false;
   bool ball2HitsTopCushion = false;
   final collisionChain = <String>[];
 
@@ -274,6 +285,9 @@ Map<String, dynamic> _runSingleSimulation({
     } else if (ev.type == CollisionType.ballCushion) {
       final seg = '${ev.primaryBall.name}-${ev.cushion?.name}';
       collisionChain.add(seg);
+      if (ev.primaryBall == BallId.cue && !hitsCueToObj2) {
+        cueHitsCushionBeforeCarom = true;
+      }
       if (ev.primaryBall == BallId.object1 && ev.cushion == CushionId.shortNear) {
         ball2HitsTopCushion = true;
       }
@@ -314,9 +328,9 @@ Map<String, dynamic> _runSingleSimulation({
   final critC = ball2HitsTopCushion;
   final s2Ratio = ball2PathLength / config.lengthMeters;
   final critD = s2Ratio >= 1.4 && s2Ratio <= 2.2;
-  // Bi 1 trô lùi xuống và sang phải về phía Bi 3 (vùng x > obj1.x, y > obj1.y)
+  // Bi 1 trô lùi xuống và sang phải về phía Bi 3 (vùng x > obj1.x, y > obj1.y) và không chạm băng trước carom
   final cueDisplacementAfter = finalPosCue - obj1PosM;
-  final critE = cueDisplacementAfter.x > 0.05 && cueDisplacementAfter.y > 0.05;
+  final critE = cueDisplacementAfter.x > 0.05 && cueDisplacementAfter.y > 0.05 && !cueHitsCushionBeforeCarom;
 
   return {
     'zMm': zMm,
@@ -327,6 +341,7 @@ Map<String, dynamic> _runSingleSimulation({
     'actualFraction': actualFractionObj1 ?? fraction,
     'hitsCueToObj1': hitsCueToObj1,
     'hitsCueToObj2': hitsCueToObj2,
+    'cueHitsCushionBeforeCarom': cueHitsCushionBeforeCarom,
     'ball2HitsTopCushion': ball2HitsTopCushion,
     'minDistCueToObj2': minDistCueToObj2,
     'ball2PathLength': ball2PathLength,

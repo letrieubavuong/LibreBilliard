@@ -617,7 +617,7 @@ void main() {
         lesson: rp01,
         activeContact: rp01.shotParams.contact,
         activeEffet: rp01.shotParams.effet,
-        activeCustomCueSpeed: 2.70,
+        activeCustomCueSpeed: 2.85,
       );
       expect(outcomeCustom.isSuccessfulShot, isTrue);
     });

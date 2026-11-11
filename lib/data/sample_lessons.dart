@@ -759,7 +759,7 @@ class SampleLessonsRepository {
       code: 'RP-01',
       title: 'Trô Kéo Về Cơ Bản 2/3 Bi (Rappel de base 2/3 de bille)',
       subtitle:
-          'Chạm 2/3 bi má phải, hạ thấp đầu cơ dưới tâm -9.5mm, bi 2 chạy 2 chiều dài bàn hồi về góc',
+          'Chạm 2/3 bi má phải, hạ thấp đầu cơ dưới tâm -14.5mm, bi 1 lùi thẳng về bi 3, bi 2 chạy gần 2 chiều dài bàn hồi về góc',
       category: LessonCategory.gathering,
       subCategory: 'Kéo về (Rappel cơ bản)',
       difficulty: 'Dễ (Facile)',
@@ -767,12 +767,12 @@ class SampleLessonsRepository {
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Rappel de base 2/3 bi hồi về góc bàn',
         description:
-            'Bi chủ trô lùi giật xuống góc phải chạm bi 3, bi 2 chạy lên băng ngắn trên và hồi về vùng gom bi quanh bi 3',
-        cueBall: Offset(6.567, 2.493),
+            'Bi chủ trô lùi thẳng trực tiếp về bi 3 không chạm băng, bi 2 chạy lên băng ngắn trên và hồi về vùng gom bi quanh bi 3',
+        cueBall: Offset(6.490, 2.560),
         objectBall1: Offset(6.000, 2.6667),
-        objectBall2: Offset(7.710, 3.644),
-        targetZoneCenter: Offset(7.710, 3.644),
-        targetZoneRadius: 0.95,
+        objectBall2: Offset(7.710, 3.650),
+        targetZoneCenter: Offset(7.710, 3.650),
+        targetZoneRadius: 0.45,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec(
@@ -784,27 +784,27 @@ class SampleLessonsRepository {
         ),
         effet: CueBallEffetSpec.fromMm(
           xMm: 0.0,
-          zMm: -9.5,
-          customLabel: 'Dưới tâm -9.5mm (Hauteur basse)',
+          zMm: -14.5,
+          customLabel: 'Dưới tâm -14.5mm (Hauteur basse)',
           description:
-              'Không ép-phê ngang (Effet: aucun), hạ mũi cơ thấp dưới tâm để tạo lực trô lùi mạnh',
+              'Không ép-phê ngang (Effet: aucun), hạ mũi cơ thấp dưới tâm -14.5mm để tạo lực trô lùi thẳng mạnh mẽ',
         ),
         strokeType: 'Đâm xuyên êm mượt (Énergie: fort - vitesse normale)',
         speedLevel: 3,
-        customCueSpeed: 2.70,
+        customCueSpeed: 2.85,
       ),
       objective:
-          'Bài học nền tảng số 1 về kỹ thuật kéo về (Rappel de base): Bi 2 chạy quãng đường gần 2 lần chiều dài bàn (~1.8L) rồi hồi về tụ bi sát góc cùng Bi 3.',
+          'Bài học nền tảng số 1 về kỹ thuật kéo về (Rappel de base): Bi 1 sau va chạm trô lùi thẳng trực tiếp về chạm Bi 3 không chạm băng, Bi 2 chạy quãng đường gần 2 lần chiều dài bàn (~1.7L) rồi hồi về tụ bi sát góc cùng Bi 3.',
       executionSteps: [
-        'Cầu tay đặt cách bi chủ 12–15cm, mũi cơ hạ thấp -9.5mm so với tâm (vùng an toàn Dr. Dave).',
+        'Cầu tay đặt cách bi chủ 12–15cm, mũi cơ hạ thấp -14.5mm so với tâm (vùng an toàn Dr. Dave).',
         'Ngắm ngọn cơ vào má phải bi 2 sao cho độ dày che phủ đạt chính xác 2/3 trái.',
         'Tuyệt đối không để ép-phê ngang (Effet: aucun).',
-        'Ra cơ với tốc độ bình thường (vitesse normale) nhưng đâm xuyên sâu, tạo lực cấp 3 để bi 2 đủ đà chạy 2 chiều dài bàn.',
+        'Ra cơ với tốc độ bình thường (vitesse normale) nhưng đâm xuyên sâu (2.85 m/s), tạo lực cấp 3 để bi 2 đủ đà chạy 2 chiều dài bàn và bi 1 lùi thẳng về bi 3.',
       ],
       commonMistakes: [
         'Để vô tình ép-phê ngang làm bi 2 lệch hướng không lên đúng đỉnh băng ngắn trên.',
         'Đánh quá mỏng (1/2 trái) khiến bi 2 thiếu lực chạy không đủ 2 chiều dài bàn.',
-        'Đầu cơ không đủ thấp khiến bi chủ không giật lùi về được bi 3.',
+        'Đầu cơ không đủ thấp khiến bi chủ không giật lùi về được bi 3 mà bị văng cong.',
       ],
     ),
   ];
