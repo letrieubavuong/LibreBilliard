@@ -15,18 +15,16 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Cú đánh nền tảng',
       difficulty: 'Cơ bản',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Rétro ngắn gom vào góc',
         description:
             'Bi chủ kéo lùi mềm về chạm bi đỏ, bi vàng đi 1 băng ngắn quay lại',
         cueBall: Offset(2.25, 1.45),
         objectBall1: Offset(1.52, 1.12),
-        objectBall2: Offset(1.30, 0.55),
-        cueBallPath: [Offset(1.52, 1.12), Offset(1.42, 0.72)],
-        objectBall1Path: [Offset(0.0, 0.75), Offset(1.05, 0.62)],
-        objectBall2Path: [Offset(1.12, 0.35)],
-        targetZoneCenter: Offset(1.22, 0.58),
-        targetZoneRadius: 0.58,
+        objectBall2: Offset(2.00, 1.10),
+        targetZoneCenter: Offset(1.45, 0.92),
+        targetZoneRadius: 1.25,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.threeQuarters(
@@ -41,8 +39,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Ra cơ gọn, miết nhẹ đầu cơ (4–5cm)',
         speedLevel: 2,
-        explicitAimAngleRadians: -3.51703,
-        customCueSpeed: 5.06,
+        customCueSpeed: 1.60,
       ),
       objective:
           'Làm chủ cú Rétro ngắn để bi mục tiêu 1 (Vàng) chạm 1 băng ngắn rồi quay về đúng vị trí bi Đỏ, tạo thành hình mắt kính sát góc.',
@@ -66,21 +63,15 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Cú đánh nền tảng',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Poussé giữ nhịp dọc băng',
         description: 'Đẩy đồng tốc cả 2 bi tiến lên 12cm dọc theo băng dài',
         cueBall: Offset(3.05, 0.58),
         objectBall1: Offset(3.52, 0.36),
-        objectBall2: Offset(3.88, 0.68),
-        cueBallPath: [
-          Offset(3.52, 0.36),
-          Offset(3.88, 0.68),
-          Offset(4.02, 0.58),
-        ],
-        objectBall1Path: [Offset(4.38, 0.32)],
-        objectBall2Path: [Offset(4.42, 0.76)],
-        targetZoneCenter: Offset(4.25, 0.54),
-        targetZoneRadius: 0.52,
+        objectBall2: Offset(3.40, 0.12),
+        targetZoneCenter: Offset(3.73, 0.22),
+        targetZoneRadius: 0.75,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.half(
@@ -95,8 +86,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đẩy mượt tăng tốc đều (Không giật cơ)',
         speedLevel: 1,
-        explicitAimAngleRadians: -0.32549,
-        customCueSpeed: 0.585,
+        customCueSpeed: 0.55,
       ),
       objective:
           'Di chuyển cả 3 bi tịnh tiến dọc theo băng dài từng nhịp 10–15cm mà không làm 2 bi mục tiêu tách xa nhau (nền tảng của Seri dọc băng).',
@@ -120,22 +110,16 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Kiểm soát lực',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Amorti giữ bi chủ ở lại vùng gom',
         description:
             'Bi chủ lăn nhẹ đến chạm mỏng bi đỏ, trong khi bi vàng chạy 2 băng quay về',
         cueBall: Offset(3.0, 2.0),
         objectBall1: Offset(1.35, 1.18),
-        objectBall2: Offset(0.95, 0.72),
-        cueBallPath: [Offset(1.35, 1.18), Offset(1.06, 0.86)],
-        objectBall1Path: [
-          Offset(0.0, 0.55),
-          Offset(0.65, 0.0),
-          Offset(1.25, 0.48),
-        ],
-        objectBall2Path: [Offset(0.76, 0.62)],
-        targetZoneCenter: Offset(1.02, 0.66),
-        targetZoneRadius: 0.54,
+        objectBall2: Offset(1.30, 0.90),
+        targetZoneCenter: Offset(1.02, 0.95),
+        targetZoneRadius: 0.85,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.twoThirds(
@@ -150,8 +134,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh mềm cổ tay (Lực 2/5)',
         speedLevel: 2,
-        explicitAimAngleRadians: -2.66503,
-        customCueSpeed: 1.32,
+        customCueSpeed: 1.20,
       ),
       objective:
           'Khi bi chủ ở xa còn 2 bi mục tiêu đã ở gần góc: dùng đòn Amorti để bi chủ dừng lại ngay cạnh bi số 2, đồng thời đưa bi số 1 đi 2 băng góc quay lại chụm 3 bi.',
@@ -174,22 +157,16 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Cú đánh đặc biệt',
       difficulty: 'Nâng cao',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Piqué xử lý thế 3 bi thẳng hàng sát băng',
         description:
             'Bi chủ lách nhẹ qua má bi vàng rồi vòng cong chạm mặt bi đỏ mà không đẩy bi đi xa',
         cueBall: Offset(2.02, 0.46),
         objectBall1: Offset(2.48, 0.36),
-        objectBall2: Offset(2.45, 0.86),
-        cueBallPath: [
-          Offset(2.48, 0.36),
-          Offset(2.62, 0.60),
-          Offset(2.46, 0.72),
-        ],
-        objectBall1Path: [Offset(2.85, 0.30)],
-        objectBall2Path: [Offset(2.38, 1.12)],
-        targetZoneCenter: Offset(2.56, 0.72),
-        targetZoneRadius: 0.52,
+        objectBall2: Offset(2.50, 0.60),
+        targetZoneCenter: Offset(2.50, 0.47),
+        targetZoneRadius: 0.45,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.oneQuarter(
@@ -206,8 +183,7 @@ class SampleLessonsRepository {
         strokeType: 'Thả rơi ngọn cơ nhẹ bằng cổ tay (Lực 1/5)',
         speedLevel: 1,
         cueElevationDegrees: 40.0,
-        explicitAimAngleRadians: -1.41406,
-        customCueSpeed: 1.14,
+        customCueSpeed: 1.00,
       ),
       objective:
           'Giải quyết thế bi "chết góc" (khi góc chạm thẳng thông thường quá hẹp không thể Rétro ngang được) mà vẫn giữ nguyên 3 bi trong diện tích 15cm.',
@@ -233,18 +209,16 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 1 băng',
       difficulty: 'Cơ bản',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Hình gom 1 băng dài kinh điển (Xavier Gretillat)',
         description:
             'Bi vàng đập băng dài rồi tụ về khu vực đầu ô cấm góc trái',
         cueBall: Offset(3.4, 1.65),
         objectBall1: Offset(2.3, 1.05),
-        objectBall2: Offset(1.35, 0.85),
-        cueBallPath: [Offset(2.3, 1.05), Offset(1.42, 0.92)],
-        objectBall1Path: [Offset(1.65, 0.0), Offset(1.12, 0.52)],
-        objectBall2Path: [Offset(0.98, 0.88)],
-        targetZoneCenter: Offset(1.18, 0.75),
-        targetZoneRadius: 0.56,
+        objectBall2: Offset(2.0, 1.30),
+        targetZoneCenter: Offset(1.80, 0.95),
+        targetZoneRadius: 0.90,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.oneThird(
@@ -260,8 +234,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh êm, kiểm soát tốc độ bi chủ',
         speedLevel: 2,
-        explicitAimAngleRadians: -2.54255,
-        customCueSpeed: 1.073,
+        customCueSpeed: 0.90,
       ),
       objective:
           'Thu hồi bi Vàng đang nằm lơ lửng ngoài trung tâm về sát mép ô cấm góc cùng với bi Đỏ để bắt đầu vào seri góc.',
@@ -284,25 +257,16 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 2 băng',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Gom bi Chữ thập (Croisé)',
         description:
             'Bi vàng đi 2 băng góc (dài - ngắn) vòng về đón đầu bi chủ và bi đỏ',
         cueBall: Offset(2.8, 2.3),
         objectBall1: Offset(2.1, 1.5),
-        objectBall2: Offset(1.5, 1.9),
-        cueBallPath: [
-          Offset(2.1, 1.5),
-          Offset(1.52, 1.72),
-        ],
-        objectBall1Path: [
-          Offset(1.2, 0.0),
-          Offset(0.0, 0.8),
-          Offset(1.12, 1.25),
-        ],
-        objectBall2Path: [Offset(1.18, 1.88)],
-        targetZoneCenter: Offset(1.28, 1.55),
-        targetZoneRadius: 0.60,
+        objectBall2: Offset(2.4, 1.3),
+        targetZoneCenter: Offset(1.81, 0.87),
+        targetZoneRadius: 1.60,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.half(
@@ -319,8 +283,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh chắc tay (Lực 2.5/5)',
         speedLevel: 3,
-        explicitAimAngleRadians: -3.41963,
-        customCueSpeed: 5.38,
+        customCueSpeed: 1.70,
       ),
       objective:
           'Biến thế bi rời rạc giữa bàn thành thế 3 bi chụm sát nhau ở khu vực đầu ô cấm bằng cách mượn 2 băng góc cho bi số 1.',
@@ -344,25 +307,16 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom về góc Amery',
       difficulty: 'Nâng cao',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Gom bi về vùng Amery trước ô cấm',
         description:
             'Bi vàng chạy 1 băng lên trên, bi chủ đập băng lật về chạm bi đỏ',
         cueBall: Offset(1.6, 2.6),
         objectBall1: Offset(0.95, 2.1),
-        objectBall2: Offset(1.45, 1.15),
-        cueBallPath: [
-          Offset(0.95, 2.1),
-          Offset(0.0, 1.65),
-          Offset(1.36, 1.18),
-        ],
-        objectBall1Path: [
-          Offset(0.55, 0.0),
-          Offset(1.32, 0.72),
-        ],
-        objectBall2Path: [Offset(1.75, 0.96)],
-        targetZoneCenter: Offset(1.48, 0.95),
-        targetZoneRadius: 0.56,
+        objectBall2: Offset(1.10, 1.90),
+        targetZoneCenter: Offset(0.64, 1.38),
+        targetZoneRadius: 1.25,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.oneQuarter(
@@ -378,8 +332,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Ra cơ mượt, đi hết ngọn cơ',
         speedLevel: 2,
-        explicitAimAngleRadians: -2.43079,
-        customCueSpeed: 1.32,
+        customCueSpeed: 1.10,
       ),
       objective:
           'Đưa toàn bộ 3 bi từ nửa bàn dưới tập kết về đúng "Điểm vàng Amery" (giao điểm vạch ô cấm với băng dài) để đánh seri lớn.',
@@ -401,18 +354,16 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 2 băng',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Gom bi Dọc bàn (Khứ hồi băng ngắn)',
         description:
             'Khi góc chạm quá thẳng không thể gạt ngang, cho bi vàng đi thẳng xuống băng ngắn đối diện quay về',
         cueBall: Offset(1.2, 1.3),
         objectBall1: Offset(2.3, 1.35),
-        objectBall2: Offset(1.5, 0.72),
-        cueBallPath: [Offset(2.3, 1.35), Offset(1.56, 0.82)],
-        objectBall1Path: [Offset(8.0, 1.25), Offset(1.85, 0.52)],
-        objectBall2Path: [Offset(1.22, 0.54)],
-        targetZoneCenter: Offset(1.52, 0.66),
-        targetZoneRadius: 0.58,
+        objectBall2: Offset(0.9, 1.1),
+        targetZoneCenter: Offset(3.07, 1.35),
+        targetZoneRadius: 4.60,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec(
@@ -431,8 +382,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Trô dứt khoát (Lực 4/5)',
         speedLevel: 4,
-        explicitAimAngleRadians: -0.22146,
-        customCueSpeed: 5.22,
+        customCueSpeed: 2.40,
       ),
       objective:
           'Giải quyết tình huống bi số 1 nằm thẳng hàng hướng ra giữa bàn: thay vì cố đánh mỏng làm hỏng bi, ta đánh dày Rétro cho bi 1 đi khứ hồi băng ngắn đối diện quay về góc.',
@@ -458,6 +408,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống 3 băng',
       difficulty: 'Cơ bản',
+      isPhysicsVerified: true,
       systemFormula:
           'Điểm Băng 1 = Điểm Đứng (Chân cơ) − Điểm Trúng (Băng 3)',
       diagram: const TableDiagramSpec(
@@ -466,15 +417,7 @@ class SampleLessonsRepository {
             'Đứng ở nút 50, muốn về nút 30 băng 3 -> Ngắm vào nút 20 trên băng đầu',
         cueBall: Offset(5.0, 3.6),
         objectBall1: Offset(5.8, 2.2),
-        objectBall2: Offset(2.8, 3.45),
-        cueBallPath: [
-          Offset(2.0, 0.0),
-          Offset(0.0, 1.8),
-          Offset(3.0, 4.0),
-          Offset(2.8, 3.45),
-        ],
-        objectBall1Path: [Offset(6.3, 1.6)],
-        objectBall2Path: [Offset(2.55, 3.12)],
+        objectBall2: Offset(0.35, 3.72),
         showDiamondNumbers: true,
         showCornerZones: false,
       ),
@@ -493,8 +436,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Ra cơ xuyên suốt, không bẻ cổ tay',
         speedLevel: 3,
-        explicitAimAngleRadians: -2.39498,
-        customCueSpeed: 2.856,
+        customCueSpeed: 2.80,
       ),
       objective:
           'Giải cứu những hình bi xa hoặc bị che mặt bi trong Libre bằng cách tính chính xác đường đi 3 băng về vùng có 2 bi mục tiêu.',
@@ -517,6 +459,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống Ngắn - Dài',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       systemFormula:
           'Điểm Ngắm (Băng dài 1) = Điểm Xuất phát (Băng ngắn) + 2 nút',
       diagram: const TableDiagramSpec(
@@ -525,14 +468,7 @@ class SampleLessonsRepository {
             'Xuất phát nút 10 băng ngắn + 20 = Ngắm nút 30 băng dài',
         cueBall: Offset(0.5, 1.0),
         objectBall1: Offset(1.4, 0.7),
-        objectBall2: Offset(6.2, 0.55),
-        cueBallPath: [
-          Offset(3.0, 0.0),
-          Offset(7.2, 4.0),
-          Offset(6.2, 0.55),
-        ],
-        objectBall1Path: [Offset(1.0, 1.25)],
-        objectBall2Path: [Offset(5.85, 0.35)],
+        objectBall2: Offset(4.70, 3.75),
         showDiamondNumbers: true,
         showCornerZones: true,
       ),
@@ -551,8 +487,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh lăn tự nhiên (Lực 3/5)',
         speedLevel: 3,
-        explicitAimAngleRadians: -0.89179,
-        customCueSpeed: 2.346,
+        customCueSpeed: 2.30,
       ),
       objective:
           'Tính nhanh đường bi từ băng ngắn đi 2 băng dài về góc đối diện khi 2 bi mục tiêu nằm ở hai đầu bàn.',
@@ -575,6 +510,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống 1 băng',
       difficulty: 'Cơ bản',
+      isPhysicsVerified: true,
       systemFormula:
           'Điểm Băng = Trung bình cộng (Bi chủ + Bi đích) ± (0.5 nút × Số mũi Ép-phê)',
       diagram: const TableDiagramSpec(
@@ -582,15 +518,8 @@ class SampleLessonsRepository {
         description:
             'Thêm 2 ép-phê phải giúp mở rộng góc ra thêm đúng 1 nút băng',
         cueBall: Offset(2.0, 3.2),
-        objectBall1: Offset(5.0, 3.0),
-        objectBall2: Offset(5.55, 2.75),
-        cueBallPath: [
-          Offset(3.0, 0.0),
-          Offset(5.0, 3.0),
-          Offset(5.55, 2.75),
-        ],
-        objectBall1Path: [Offset(5.35, 3.45)],
-        objectBall2Path: [Offset(5.90, 2.50)],
+        objectBall1: Offset(3.15, 0.90),
+        objectBall2: Offset(2.85, 1.21),
         showDiamondNumbers: true,
         showCornerZones: false,
       ),
@@ -608,6 +537,8 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh êm để ép-phê kịp ăn vào băng',
         speedLevel: 2,
+        aimTargetDiamond: Offset(3.0, 0.0),
+        customCueSpeed: 1.60,
       ),
       objective:
           'Xử lý các cú đánh A-băng (Bricole 1 băng) chính xác để vừa ghi điểm vừa không làm xáo trộn thế 2 bi mục tiêu đang đứng gần nhau.',
@@ -630,6 +561,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống 2 băng',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       systemFormula:
           'Ngắm nút 10–15 băng dài với 2 Ép-phê thuận → Ra đúng mép vạch ô cấm góc',
       diagram: const TableDiagramSpec(
@@ -638,17 +570,9 @@ class SampleLessonsRepository {
             'Bi chủ chạm mỏng bi vàng, ăn 2 băng góc rồi vòng ra chạm bi đỏ từ phía sau',
         cueBall: Offset(3.1, 1.3),
         objectBall1: Offset(2.0, 0.8),
-        objectBall2: Offset(1.35, 0.92),
-        cueBallPath: [
-          Offset(2.0, 0.8),
-          Offset(1.1, 0.0),
-          Offset(0.0, 0.72),
-          Offset(1.35, 0.92),
-        ],
-        objectBall1Path: [Offset(1.75, 1.18)],
-        objectBall2Path: [Offset(1.58, 0.66)],
-        targetZoneCenter: Offset(1.52, 0.92),
-        targetZoneRadius: 0.52,
+        objectBall2: Offset(1.8, 1.0),
+        targetZoneCenter: Offset(1.03, 0.99),
+        targetZoneRadius: 0.95,
         showDiamondNumbers: true,
         showCornerZones: true,
       ),
@@ -666,8 +590,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh mềm tay (Lực 2/5)',
         speedLevel: 2,
-        explicitAimAngleRadians: -3.91497,
-        customCueSpeed: 3.30,
+        customCueSpeed: 1.30,
       ),
       objective:
           'Khi 2 bi đích đã ở gần nhau nhưng góc trực tiếp sẽ đẩy bi số 1 đi mất: mượn 2 băng góc cho bi chủ để giữ cả 3 bi lại đầu vạch ô cấm.',
@@ -692,23 +615,16 @@ class SampleLessonsRepository {
       category: LessonCategory.serie,
       subCategory: 'Seri dọc băng',
       difficulty: 'Cơ bản',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Thế bi Mắt kính (Lunettes) dọc băng dài',
         description:
             'Chạm mỏng bi ngoài, mượn băng dài chạm nhẹ bi trong để lặp lại mắt kính',
         cueBall: Offset(2.55, 0.52),
         objectBall1: Offset(3.20, 0.68),
-        objectBall2: Offset(3.20, 0.24),
-        cueBallPath: [
-          Offset(3.20, 0.68),
-          Offset(3.38, 0.0),
-          Offset(3.20, 0.24),
-          Offset(3.08, 0.50),
-        ],
-        objectBall1Path: [Offset(3.65, 0.72)],
-        objectBall2Path: [Offset(3.62, 0.24)],
-        targetZoneCenter: Offset(3.52, 0.48),
-        targetZoneRadius: 0.48,
+        objectBall2: Offset(3.30, 1.10),
+        targetZoneCenter: Offset(3.72, 1.11),
+        targetZoneRadius: 1.00,
       ),
       shotParams: ShotParameters(
         contact: BallContactSpec.oneQuarter(
@@ -725,8 +641,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Chạm nhẹ cảm giác đầu cơ (Lực 1/5)',
         speedLevel: 1,
-        explicitAimAngleRadians: -0.93131,
-        customCueSpeed: 0.585,
+        customCueSpeed: 0.75,
       ),
       objective:
           'Giữ 2 bi mục tiêu luôn đi song song như gọng mắt kính dọc theo băng dài, mỗi lần đánh chỉ nhích lên 4–6cm.',
@@ -749,17 +664,15 @@ class SampleLessonsRepository {
       category: LessonCategory.serie,
       subCategory: 'Seri trong góc',
       difficulty: 'Trung cấp',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Đưa bi số 1 ra khỏi vạch ô cấm (Sortie de Zone)',
         description:
             'Ở điểm thứ 2 trong ô cấm, bắt buộc đẩy ít nhất 1 bi đích vượt qua vạch trắng',
         cueBall: Offset(0.95, 0.52),
         objectBall1: Offset(1.55, 0.32),
-        objectBall2: Offset(1.35, 0.72),
-        cueBallPath: [Offset(1.55, 0.32), Offset(1.32, 0.56)],
-        objectBall1Path: [Offset(2.12, 0.30)],
-        objectBall2Path: [Offset(1.62, 0.88)],
-        targetZoneCenter: Offset(1.78, 0.56),
+        objectBall2: Offset(1.70, 0.50),
+        targetZoneCenter: Offset(1.82, 0.42),
         targetZoneRadius: 0.52,
         showCornerZones: true,
       ),
@@ -777,8 +690,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Kiểm soát chính xác độ lăn của bi Vàng',
         speedLevel: 1,
-        explicitAimAngleRadians: -1.02436,
-        customCueSpeed: 0.72,
+        customCueSpeed: 0.80,
       ),
       objective:
           'Tuân thủ luật vùng giới hạn góc Libre (71×35.5cm): ở cú đánh thứ 2 khi cả 2 bi đích nằm trong ô, phải đưa ít nhất 1 bi đích bước qua vạch rồi kéo trở lại ở nhịp sau.',
@@ -802,18 +714,16 @@ class SampleLessonsRepository {
       category: LessonCategory.serie,
       subCategory: 'Seri trong góc',
       difficulty: 'Nâng cao',
+      isPhysicsVerified: true,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Thế bi Bắc cầu (Chevalet) trên vạch ô cấm',
         description:
             'Bi đỏ nằm trong vạch, bi vàng nằm ngoài vạch: mượn băng dài cho bi vàng nhảy qua lại vạch',
         cueBall: Offset(2.38, 0.56),
         objectBall1: Offset(1.98, 0.28),
-        objectBall2: Offset(1.56, 0.48),
-        cueBallPath: [Offset(1.98, 0.28), Offset(1.76, 0.66)],
-        objectBall1Path: [Offset(1.85, 0.0), Offset(1.88, 0.26)],
-        objectBall2Path: [Offset(1.36, 0.42)],
-        targetZoneCenter: Offset(1.68, 0.44),
-        targetZoneRadius: 0.48,
+        objectBall2: Offset(1.60, 0.50),
+        targetZoneCenter: Offset(1.14, 0.55),
+        targetZoneRadius: 0.95,
         showCornerZones: true,
       ),
       shotParams: ShotParameters(
@@ -830,8 +740,7 @@ class SampleLessonsRepository {
         ),
         strokeType: 'Đánh chạm nhẹ bằng ngón tay cầm cơ (Lực 1/5)',
         speedLevel: 1,
-        explicitAimAngleRadians: -4.11367,
-        customCueSpeed: 1.152,
+        customCueSpeed: 0.80,
       ),
       objective:
           'Bí quyết của các cơ thủ Libre chuyên nghiệp (Xavier Gretillat): giữ 2 bi đích "cưỡi" hai bên vạch ô cấm góc để ghi hàng trăm điểm tại một góc bàn.',

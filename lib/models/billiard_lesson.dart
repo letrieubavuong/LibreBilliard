@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../physics/shot_input.dart';
 import 'billiard_specs.dart';
 
 export 'billiard_specs.dart';
@@ -53,12 +54,14 @@ enum LessonCategory {
 /// Kết hợp kế thừa từ [BallContactSpec] (Chạm trái) và [CueBallEffetSpec] (Ép-phê/Tâm bi),
 /// cùng mức lực, góc nâng cơ (Massé/Piqué) và điểm ngắm băng (nếu đánh A-băng / Bricole).
 class ShotParameters {
-  final BallContactSpec contact; // Độ dày chạm trái (1/8, 1/4, 1/3, 1/2, 2/3, 3/4, Tràn mặt)
+  final BallContactSpec contact; // Độ dày chạm trái (1/8, 1/4, 1/3, 2/3, 3/4, Tràn mặt)
   final CueBallEffetSpec effet; // Điểm chạm bi chủ (12h/6h + Ép-phê Trái/Phải)
   final String strokeType; // Kiểu ra cơ: Đẩy mượt (Poussé), Giữ ngọn (Rétro), Phanh (Amorti)
   final int speedLevel; // Mức lực: 1..5
 
-  /// Tốc độ ngọn cơ tinh chỉnh (m/s) nếu bài học cần vận tốc cụ thể ngoài 5 bậc mặc định.
+  /// Tốc độ ngọn cơ tham chiếu (m/s) tại `speedLevel` của bài học.
+  /// Khi người dùng thay đổi mức lực `activeLevel` (1..5), vận tốc thực tế được nội suy tỷ lệ đơn điệu
+  /// qua [effectiveCueSpeedForLevel] để tăng lực 1 -> 5 luôn làm tăng nghiêm ngặt tốc độ cơ.
   final double? customCueSpeed;
 
   /// Góc nâng chuôi cơ (độ) cho các đòn Piqué / Massé (mặc định 0°).
@@ -82,12 +85,30 @@ class ShotParameters {
     this.explicitAimAngleRadians,
   });
 
+  /// Tính vận tốc đầu cơ thực tế (m/s) cho mức lực `activeLevel` (1..5).
+  /// Đảm bảo tính đơn điệu tăng nghiêm ngặt `v(1) < v(2) < v(3) < v(4) < v(5)` ở mọi bài học.
+  double effectiveCueSpeedForLevel(int activeLevel) {
+    return ShotInput.calibratedCueSpeedForLevel(
+      activeSpeedLevel: activeLevel,
+      referenceSpeedLevel: speedLevel,
+      referenceCueSpeed: customCueSpeed,
+    );
+  }
+
+  /// Vận tốc đầu cơ thực tế (m/s) tại `speedLevel` hiện hành.
+  double get effectiveCueSpeed => effectiveCueSpeedForLevel(speedLevel);
+
+  /// Có đang ở chế độ ngắm tự do / ngắm điểm băng (thay vì ngắm Ghost Ball theo preset độ dày) hay không.
+  bool get usesFreeOrCushionAim =>
+      aimTargetDiamond != null || explicitAimAngleRadians != null;
+
   ShotParameters copyWith({
     BallContactSpec? contact,
     CueBallEffetSpec? effet,
     String? strokeType,
     int? speedLevel,
     double? customCueSpeed,
+    bool clearCustomCueSpeed = false,
     double? cueElevationDegrees,
     Offset? aimTargetDiamond,
     bool clearAimTarget = false,
@@ -99,7 +120,8 @@ class ShotParameters {
       effet: effet ?? this.effet,
       strokeType: strokeType ?? this.strokeType,
       speedLevel: (speedLevel ?? this.speedLevel).clamp(1, 5),
-      customCueSpeed: customCueSpeed ?? this.customCueSpeed,
+      customCueSpeed:
+          clearCustomCueSpeed ? null : (customCueSpeed ?? this.customCueSpeed),
       cueElevationDegrees: cueElevationDegrees ?? this.cueElevationDegrees,
       aimTargetDiamond:
           clearAimTarget ? null : (aimTargetDiamond ?? this.aimTargetDiamond),
@@ -166,6 +188,9 @@ class BilliardLesson {
   final List<String> commonMistakes;
   final String? systemFormula;
 
+  /// Đánh dấu bài học đã được kiểm chứng đầy đủ các đặc trưng kỹ thuật trên `CaromPhysicsEngine`.
+  final bool isPhysicsVerified;
+
   const BilliardLesson({
     required this.id,
     required this.code,
@@ -180,6 +205,7 @@ class BilliardLesson {
     required this.executionSteps,
     required this.commonMistakes,
     this.systemFormula,
+    this.isPhysicsVerified = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -196,6 +222,7 @@ class BilliardLesson {
         'executionSteps': executionSteps,
         'commonMistakes': commonMistakes,
         'systemFormula': systemFormula,
+        'isPhysicsVerified': isPhysicsVerified,
       };
 
   factory BilliardLesson.fromJson(Map<String, dynamic> json) {
@@ -236,6 +263,7 @@ class BilliardLesson {
               .toList() ??
           const [],
       systemFormula: json['systemFormula'] as String?,
+      isPhysicsVerified: json['isPhysicsVerified'] as bool? ?? true,
     );
   }
 }
