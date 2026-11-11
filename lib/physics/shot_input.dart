@@ -1,10 +1,61 @@
 import 'dart:math' as math;
+import 'ball_state.dart';
 import 'table_config.dart';
 import 'vector_math.dart';
+
+/// Mã lỗi kiểm tra tính hợp lệ của `ShotInput` trước khi đưa vào `CaromPhysicsEngine`.
+enum ShotInputValidationErrorCode {
+  nonFiniteValue,
+  ballOutOfBounds,
+  ballsOverlapping,
+  invalidCueSpeed,
+}
+
+/// Chi tiết một lỗi kiểm tra đầu vào vật lý.
+class ShotInputValidationIssue {
+  final ShotInputValidationErrorCode code;
+  final String message;
+  final BallId? primaryBall;
+  final BallId? secondaryBall;
+
+  const ShotInputValidationIssue({
+    required this.code,
+    required this.message,
+    this.primaryBall,
+    this.secondaryBall,
+  });
+
+  @override
+  String toString() => message;
+}
+
+/// Kết quả kiểm tra tính hợp lệ của `ShotInput`.
+class ShotInputValidationResult {
+  final List<ShotInputValidationIssue> issues;
+
+  const ShotInputValidationResult(this.issues);
+
+  bool get isValid => issues.isEmpty;
+}
+
+/// Ngoại lệ ném ra khi `ShotInput` vi phạm biên bàn hoặc chồng lấp vượt quá dung sai số học `positionValidationToleranceMeters`.
+class ShotInputValidationException implements Exception {
+  final ShotInputValidationResult validation;
+
+  const ShotInputValidationException(this.validation);
+
+  @override
+  String toString() =>
+      'ShotInputValidationException: ${validation.issues.map((e) => e.message).join('; ')}';
+}
 
 /// Đầu vào vật lý đầy đủ và tường minh của một cú đánh Billiard Carom.
 /// Hoàn toàn độc lập với UI (không phụ thuộc Widget/Canvas).
 class ShotInput {
+  /// Dung sai số học dấu phẩy động tối đa cho phép khi kiểm tra biên và khoảng cách tâm 2R (1 micromet = 1e-6 m).
+  /// Mọi sai lệch lớn hơn ngưỡng này đều bị từ chối rõ ràng thay vì tự ý dịch chuyển thế bi.
+  static const double positionValidationToleranceMeters = 1e-6;
+
   /// Vị trí ban đầu của Bi chủ (Trắng) tính bằng mét.
   final Vec2 cueBallPosition;
 
@@ -68,6 +119,21 @@ class ShotInput {
     return speeds[clamped - 1] * fineScale;
   }
 
+  /// Quy đổi đơn điệu từ `speedLevel` (1..5) có xét vận tốc tham chiếu `referenceCueSpeed` tại `referenceSpeedLevel`.
+  /// Đảm bảo với mọi bài học: tăng `speedLevel` từ 1 -> 5 luôn làm tăng nghiêm ngặt vận tốc đầu cơ `v_cue`.
+  static double calibratedCueSpeedForLevel({
+    required int activeSpeedLevel,
+    required int referenceSpeedLevel,
+    double? referenceCueSpeed,
+  }) {
+    if (referenceCueSpeed == null || referenceCueSpeed <= 0.0) {
+      return cueSpeedFromLevel(activeSpeedLevel);
+    }
+    final baseAtRef = cueSpeedFromLevel(referenceSpeedLevel);
+    final scale = referenceCueSpeed / baseAtRef;
+    return cueSpeedFromLevel(activeSpeedLevel, fineScale: scale);
+  }
+
   /// Chiếu điểm chạm đầu cơ `(dx, dy)` vào hình tròn hợp lệ bán kính `maxRadius` (circular valid domain).
   static Vec2 clampTipOffsetToDisk(
     Vec2 rawOffset, {
@@ -102,6 +168,90 @@ class ShotInput {
       maxRadius: config.maxTipOffsetRatio,
     );
     return clamped * config.ballRadius;
+  }
+
+  /// Kiểm tra tính hợp lệ hình học & vật lý của `ShotInput` với dung sai số học `toleranceMeters`.
+  /// Không tự ý dịch chuyển vị trí các bi.
+  ShotInputValidationResult validate(
+    TableConfig config, {
+    double toleranceMeters = positionValidationToleranceMeters,
+  }) {
+    final issues = <ShotInputValidationIssue>[];
+    final r = config.ballRadius;
+    final l = config.lengthMeters;
+    final w = config.widthMeters;
+
+    bool isFiniteVec(Vec2 v) => v.x.isFinite && v.y.isFinite;
+
+    if (!isFiniteVec(cueBallPosition) ||
+        !isFiniteVec(objectBall1Position) ||
+        !isFiniteVec(objectBall2Position) ||
+        !isFiniteVec(aimDirection) ||
+        !cueSpeed.isFinite) {
+      issues.add(
+        const ShotInputValidationIssue(
+          code: ShotInputValidationErrorCode.nonFiniteValue,
+          message: 'Tọa độ bi hoặc vận tốc đầu cơ chứa giá trị không hữu hạn (NaN/Infinity).',
+        ),
+      );
+      return ShotInputValidationResult(issues);
+    }
+
+    if (cueSpeed < 0.0) {
+      issues.add(
+        ShotInputValidationIssue(
+          code: ShotInputValidationErrorCode.invalidCueSpeed,
+          message: 'Vận tốc đầu cơ không được âm (cueSpeed = $cueSpeed m/s).',
+        ),
+      );
+    }
+
+    void checkBounds(BallId id, Vec2 pos) {
+      if (pos.x < r - toleranceMeters ||
+          pos.x > l - r + toleranceMeters ||
+          pos.y < r - toleranceMeters ||
+          pos.y > w - r + toleranceMeters) {
+        issues.add(
+          ShotInputValidationIssue(
+            code: ShotInputValidationErrorCode.ballOutOfBounds,
+            primaryBall: id,
+            message:
+                'Viên bi $id tại (${pos.x.toStringAsFixed(4)}, ${pos.y.toStringAsFixed(4)}) m nằm ngoài biên lòng bàn [${r.toStringAsFixed(4)}, ${(l - r).toStringAsFixed(4)}] x [${r.toStringAsFixed(4)}, ${(w - r).toStringAsFixed(4)}] m.',
+          ),
+        );
+      }
+    }
+
+    checkBounds(BallId.cue, cueBallPosition);
+    checkBounds(BallId.object1, objectBall1Position);
+    checkBounds(BallId.object2, objectBall2Position);
+
+    final twoR = 2.0 * r;
+    void checkPair(BallId idA, Vec2 posA, BallId idB, Vec2 posB) {
+      final dist = posA.distanceTo(posB);
+      if (dist < twoR - toleranceMeters) {
+        issues.add(
+          ShotInputValidationIssue(
+            code: ShotInputValidationErrorCode.ballsOverlapping,
+            primaryBall: idA,
+            secondaryBall: idB,
+            message:
+                'Hai viên bi $idA và $idB chồng lấp lên nhau: khoảng cách tâm = ${dist.toStringAsFixed(5)} m < 2R = ${twoR.toStringAsFixed(5)} m.',
+          ),
+        );
+      }
+    }
+
+    checkPair(BallId.cue, cueBallPosition, BallId.object1, objectBall1Position);
+    checkPair(BallId.cue, cueBallPosition, BallId.object2, objectBall2Position);
+    checkPair(
+      BallId.object1,
+      objectBall1Position,
+      BallId.object2,
+      objectBall2Position,
+    );
+
+    return ShotInputValidationResult(issues);
   }
 
   double get aimAngleRadians => math.atan2(aimDirection.y, aimDirection.x);
@@ -159,4 +309,3 @@ class ShotInput {
         targetZoneRadiusMeters,
       );
 }
-

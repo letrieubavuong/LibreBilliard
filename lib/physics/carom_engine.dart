@@ -9,10 +9,20 @@ import 'vector_math.dart';
 
 /// Engine Mô phỏng Vật lý Billiard Carom 3 Bi (Đơn vị SI: m, s, kg, rad).
 /// Hoàn toàn độc lập với giao diện Flutter/Canvas.
+///
+/// Đặc tính kỹ thuật:
+/// - Kiểm tra nghiêm ngặt đầu vào `input.validate(config)` với dung sai số học `1e-6 m`
+///   (ném `ShotInputValidationException` nếu bi chồng lấp hoặc vượt biên thay vì âm thầm dịch chuyển thế bi).
+/// - Mỗi bước con `[0, subDt]` được giới hạn bởi thời điểm chuyển pha sớm nhất `timeToNextPhaseTransition`
+///   của cả 3 bi, đảm bảo gia tốc `a_i` của mỗi bi là hằng số trên toàn đoạn `[0, subDt]`.
+/// - Bộ tìm thời điểm va chạm CCD (`CollisionPhysics.findBallBallImpactTime` & `findBallCushionImpactTime`)
+///   và bộ tiến trạng thái (`advanceBallOnCloth`) dùng chung phương trình quỹ đạo bậc hai chính xác
+///   `p_i(t) = p_i0 + v_i0 * t + 0.5 * a_i * t^2`, đạt khoảng cách tiếp xúc `||p_i(t*) - p_j(t*)|| = 2R`
+///   với sai số `< 1e-12 m` mà không cần đẩy vị trí nhân tạo.
 class CaromPhysicsEngine {
   final TableConfig config;
 
-  /// Bước thời gian tích phân vật lý cơ sở (1 ms = 1000 Hz) kết hợp chia nhỏ bước tại thời điểm va chạm (CCD).
+  /// Bước thời gian tích phân vật lý cơ sở (1 ms = 1000 Hz) kết hợp chia nhỏ bước tại chuyển pha & va chạm (CCD).
   final double timeStepSeconds;
 
   /// Chu kỳ ghi nhận Snapshot cho bộ phát lại quỹ đạo (mặc định 1/60 s ~ 16.67 ms).
@@ -20,6 +30,9 @@ class CaromPhysicsEngine {
 
   /// Thời gian mô phỏng tối đa (s) để tránh vòng lặp vô tận khi thông số ma sát bằng 0.
   final double maxSimulationSeconds;
+
+  /// Bộ đếm số lần `simulate` được thực thi (phục vụ kiểm thử xác minh cache và tách biệt render/physics).
+  static int debugSimulationRunCount = 0;
 
   const CaromPhysicsEngine({
     this.config = TableConfig.standardCarom,
@@ -29,33 +42,35 @@ class CaromPhysicsEngine {
   });
 
   /// Chạy mô phỏng đầy đủ cho một cú đánh `input` và trả về `SimulationResult`.
+  /// Ném `ShotInputValidationException` nếu `input` không hợp lệ (chồng lấp hoặc ngoài biên bàn quá `1e-6 m`).
   SimulationResult simulate(ShotInput input) {
-    final R = config.ballRadius;
+    debugSimulationRunCount++;
 
-    // 1. Khởi tạo 3 viên bi (đảm bảo nằm trong lòng bàn và không chồng lấp ở t = 0)
-    final initialPositions = _sanitizeInitialPositions(
-      cue: input.cueBallPosition,
-      obj1: input.objectBall1Position,
-      obj2: input.objectBall2Position,
-    );
+    final validation = input.validate(config);
+    if (!validation.isValid) {
+      throw ShotInputValidationException(validation);
+    }
 
-    final sanitizedInput = input.copyWith(
-      cueBallPosition: initialPositions.cue,
-      objectBall1Position: initialPositions.obj1,
-      objectBall2Position: initialPositions.obj2,
+    // Chỉ khử sai số làm tròn dấu phẩy động dưới ngưỡng 1e-6 m tại biên bàn
+    final cleanInput = input.copyWith(
+      cueBallPosition: config.clampBallPositionMeters(input.cueBallPosition),
+      objectBall1Position:
+          config.clampBallPositionMeters(input.objectBall1Position),
+      objectBall2Position:
+          config.clampBallPositionMeters(input.objectBall2Position),
     );
 
     BallState cue = CueStrikePhysics.computePostStrikeCueBallState(
-      input: sanitizedInput,
+      input: cleanInput,
       config: config,
     );
     BallState obj1 = BallState(
       id: BallId.object1,
-      position: initialPositions.obj1,
+      position: cleanInput.objectBall1Position,
     );
     BallState obj2 = BallState(
       id: BallId.object2,
-      position: initialPositions.obj2,
+      position: cleanInput.objectBall2Position,
     );
 
     final snapshots = <SimulationSnapshot>[
@@ -73,7 +88,7 @@ class CaromPhysicsEngine {
     SimulationTerminationReason reason =
         SimulationTerminationReason.maxTimeReached;
 
-    while (currentTime < maxSimulationSeconds) {
+    while (currentTime < maxSimulationSeconds - 1e-12) {
       if (cue.isCompletelyAtRest &&
           obj1.isCompletelyAtRest &&
           obj2.isCompletelyAtRest) {
@@ -85,20 +100,30 @@ class CaromPhysicsEngine {
           math.min(timeStepSeconds, maxSimulationSeconds - currentTime);
       int subStepGuard = 0;
 
-      while (remainingDt > 1e-9 && subStepGuard < 16) {
+      while (remainingDt > 1e-12 && subStepGuard < 24) {
         subStepGuard++;
 
-        // Tìm sự kiện va chạm sớm nhất (CCD) trong khoảng [0, remainingDt]
+        // Giới hạn bước con theo thời điểm chuyển pha sớm nhất (Trượt -> Lăn hoặc Lăn -> Dừng)
+        // để trên đoạn [0, phaseBoundedDt], gia tốc của cả 3 bi đều hoàn toàn không đổi.
+        double phaseBoundedDt = remainingDt;
+        for (final b in [cue, obj1, obj2]) {
+          final tPhase = b.timeToNextPhaseTransition(config);
+          if (tPhase > 1e-9 && tPhase < phaseBoundedDt) {
+            phaseBoundedDt = tPhase;
+          }
+        }
+
+        // Tìm sự kiện va chạm sớm nhất (CCD) trên quỹ đạo bậc hai trong khoảng [0, phaseBoundedDt]
         final earliest = _findEarliestCollision(
           cue: cue,
           obj1: obj1,
           obj2: obj2,
-          maxDt: remainingDt,
+          maxDt: phaseBoundedDt,
         );
 
         if (earliest != null) {
           final tau = earliest.time;
-          if (tau > 1e-9) {
+          if (tau > 1e-12) {
             cue = advanceBallOnCloth(cue, config, tau);
             obj1 = advanceBallOnCloth(obj1, config, tau);
             obj2 = advanceBallOnCloth(obj2, config, tau);
@@ -161,8 +186,8 @@ class CaromPhysicsEngine {
             obj2 = updated.obj2;
           }
 
-          // Ghi snapshot ngay tại thời điểm va chạm để quỹ đạo gãy khúc sắc nét tại điểm chạm
-          if (snapshots.last.timestamp < currentTime - 1e-6) {
+          // Ghi snapshot ngay tại thời điểm va chạm để quỹ đạo và nội suy giữa các snapshot chính xác
+          if (snapshots.last.timestamp < currentTime - 1e-7) {
             snapshots.add(
               SimulationSnapshot(
                 timestamp: currentTime,
@@ -173,44 +198,37 @@ class CaromPhysicsEngine {
             );
           }
 
-          // Nếu tau == 0, nhích nhẹ thời gian còn lại để tránh lặp cùng một sự kiện
-          if (tau <= 1e-9) {
-            final tinyDt = math.min(remainingDt, 1e-5);
-            cue = advanceBallOnCloth(cue, config, tinyDt);
-            obj1 = advanceBallOnCloth(obj1, config, tinyDt);
-            obj2 = advanceBallOnCloth(obj2, config, tinyDt);
-            currentTime += tinyDt;
-            remainingDt -= tinyDt;
+          // Nếu sự kiện xảy ra ngay tại tau == 0, tiến một vi bước để thoát khỏi mặt tiếp xúc vừa giải
+          if (tau <= 1e-12) {
+            final tinyDt = math.min(remainingDt, 1e-6);
+            if (tinyDt > 0.0) {
+              cue = advanceBallOnCloth(cue, config, tinyDt);
+              obj1 = advanceBallOnCloth(obj1, config, tinyDt);
+              obj2 = advanceBallOnCloth(obj2, config, tinyDt);
+              currentTime += tinyDt;
+              remainingDt -= tinyDt;
+            }
           }
         } else {
-          cue = advanceBallOnCloth(cue, config, remainingDt);
-          obj1 = advanceBallOnCloth(obj1, config, remainingDt);
-          obj2 = advanceBallOnCloth(obj2, config, remainingDt);
-          currentTime += remainingDt;
-          remainingDt = 0.0;
+          cue = advanceBallOnCloth(cue, config, phaseBoundedDt);
+          obj1 = advanceBallOnCloth(obj1, config, phaseBoundedDt);
+          obj2 = advanceBallOnCloth(obj2, config, phaseBoundedDt);
+          currentTime += phaseBoundedDt;
+          remainingDt -= phaseBoundedDt;
         }
-
-        // Bảo hiểm chống chồng lấp hình học do sai số làm tròn dấu phẩy động
-        final separated = _enforceMinimumSeparation(
-          cue: cue,
-          obj1: obj1,
-          obj2: obj2,
-          ballRadius: R,
-        );
-        cue = separated.cue;
-        obj1 = separated.obj1;
-        obj2 = separated.obj2;
       }
 
-      if (currentTime >= nextSnapshotTime) {
-        snapshots.add(
-          SimulationSnapshot(
-            timestamp: currentTime,
-            cueBall: cue,
-            objectBall1: obj1,
-            objectBall2: obj2,
-          ),
-        );
+      if (currentTime >= nextSnapshotTime - 1e-9) {
+        if (snapshots.last.timestamp < currentTime - 1e-7) {
+          snapshots.add(
+            SimulationSnapshot(
+              timestamp: currentTime,
+              cueBall: cue,
+              objectBall1: obj1,
+              objectBall2: obj2,
+            ),
+          );
+        }
         nextSnapshotTime = currentTime + snapshotIntervalSeconds;
       }
     }
@@ -221,7 +239,8 @@ class CaromPhysicsEngine {
       reason = SimulationTerminationReason.allBallsStopped;
     }
 
-    if (snapshots.last.timestamp < currentTime - 1e-7 || snapshots.length == 1) {
+    if (snapshots.last.timestamp < currentTime - 1e-7 ||
+        snapshots.length == 1) {
       snapshots.add(
         SimulationSnapshot(
           timestamp: currentTime,
@@ -234,7 +253,7 @@ class CaromPhysicsEngine {
 
     return SimulationResult(
       config: config,
-      input: sanitizedInput,
+      input: cleanInput,
       snapshots: snapshots,
       collisionEvents: collisionEvents,
       durationSeconds: currentTime,
@@ -252,7 +271,7 @@ class CaromPhysicsEngine {
   ) {
     if (dt <= 0.0 || ball.isCompletelyAtRest) return ball;
 
-    final R = config.ballRadius;
+    final r = config.ballRadius;
     final g = config.gravity;
     final muS = config.slidingFriction;
     final muR = config.rollingFriction;
@@ -272,7 +291,7 @@ class CaromPhysicsEngine {
     double rem = dt;
 
     // 1. Pha Trượt (Sliding Phase): u = (vx - R*wy, vy + R*wx) != 0
-    final slip = Vec2(vel.x - R * omega.y, vel.y + R * omega.x);
+    final slip = Vec2(vel.x - r * omega.y, vel.y + r * omega.x);
     final slipSpeed = slip.length;
 
     if (slipSpeed > 1e-5) {
@@ -284,17 +303,18 @@ class CaromPhysicsEngine {
 
         final slideDt = math.min(rem, timeToPureRoll);
         final linAccel = -uHat * (muS * g);
-        final angAccelX = -(2.5 * muS * g / R) * uHat.y;
-        final angAccelY = (2.5 * muS * g / R) * uHat.x;
+        final angAccelX = -(2.5 * muS * g / r) * uHat.y;
+        final angAccelY = (2.5 * muS * g / r) * uHat.x;
 
-        final nextPos = pos + vel * slideDt + linAccel * (0.5 * slideDt * slideDt);
+        final nextPos =
+            pos + vel * slideDt + linAccel * (0.5 * slideDt * slideDt);
         final nextVel = vel + linAccel * slideDt;
         final nextWz = decayWz(omega.z, slideDt);
 
         Vec3 nextOmega;
         if (slideDt >= timeToPureRoll - 1e-9) {
           // Chuyển chính xác sang lăn thuần túy (u = 0): wx = -vy/R, wy = vx/R
-          nextOmega = Vec3(-nextVel.y / R, nextVel.x / R, nextWz);
+          nextOmega = Vec3(-nextVel.y / r, nextVel.x / r, nextWz);
         } else {
           nextOmega = Vec3(
             omega.x + angAccelX * slideDt,
@@ -305,7 +325,7 @@ class CaromPhysicsEngine {
 
         final avgOmega = Vec3.lerp(omega, nextOmega, 0.5);
         orient = orient.integrateAngularVelocity(avgOmega, slideDt);
-        pos = config.clampBallPositionMeters(nextPos);
+        pos = nextPos;
         vel = nextVel;
         omega = nextOmega;
         rem -= slideDt;
@@ -315,7 +335,7 @@ class CaromPhysicsEngine {
         final nextWz = decayWz(omega.z, rem);
         final nextOmega = Vec3(omega.x, omega.y, nextWz);
         orient = orient.integrateAngularVelocity(nextOmega, rem);
-        pos = config.clampBallPositionMeters(nextPos);
+        pos = nextPos;
         omega = nextOmega;
         rem = 0.0;
       }
@@ -337,19 +357,19 @@ class CaromPhysicsEngine {
           final Vec2 nextVel =
               rollDt >= timeToStop - 1e-9 ? Vec2.zero : vel + linAccel * rollDt;
           final nextWz = decayWz(omega.z, rem);
-          final nextOmega = Vec3(-nextVel.y / R, nextVel.x / R, nextWz);
+          final nextOmega = Vec3(-nextVel.y / r, nextVel.x / r, nextWz);
 
           final avgOmega = Vec3.lerp(omega, nextOmega, 0.5);
           orient = orient.integrateAngularVelocity(avgOmega, rem);
-          pos = config.clampBallPositionMeters(nextPos);
+          pos = nextPos;
           vel = nextVel;
           omega = nextOmega;
         } else {
           final nextPos = pos + vel * rem;
           final nextWz = decayWz(omega.z, rem);
-          final nextOmega = Vec3(-vel.y / R, vel.x / R, nextWz);
+          final nextOmega = Vec3(-vel.y / r, vel.x / r, nextWz);
           orient = orient.integrateAngularVelocity(nextOmega, rem);
-          pos = config.clampBallPositionMeters(nextPos);
+          pos = nextPos;
           omega = nextOmega;
         }
       } else {
@@ -366,7 +386,7 @@ class CaromPhysicsEngine {
     final phase = BallState.classifyPhase(
       velocity: vel,
       angularVelocity: omega,
-      ballRadius: R,
+      ballRadius: r,
     );
 
     return ball.copyWith(
@@ -384,7 +404,7 @@ class CaromPhysicsEngine {
     required BallState obj2,
     required double maxDt,
   }) {
-    final R = config.ballRadius;
+    final r = config.ballRadius;
     _CandidateCollision? best;
 
     void consider(_CandidateCollision candidate) {
@@ -396,8 +416,9 @@ class CaromPhysicsEngine {
     final tC1 = CollisionPhysics.findBallBallImpactTime(
       ballA: cue,
       ballB: obj1,
-      ballRadius: R,
+      ballRadius: r,
       maxDt: maxDt,
+      config: config,
     );
     if (tC1 != null) {
       consider(_CandidateCollision.ballBall(tC1, BallId.cue, BallId.object1));
@@ -406,8 +427,9 @@ class CaromPhysicsEngine {
     final tC2 = CollisionPhysics.findBallBallImpactTime(
       ballA: cue,
       ballB: obj2,
-      ballRadius: R,
+      ballRadius: r,
       maxDt: maxDt,
+      config: config,
     );
     if (tC2 != null) {
       consider(_CandidateCollision.ballBall(tC2, BallId.cue, BallId.object2));
@@ -416,8 +438,9 @@ class CaromPhysicsEngine {
     final t12 = CollisionPhysics.findBallBallImpactTime(
       ballA: obj1,
       ballB: obj2,
-      ballRadius: R,
+      ballRadius: r,
       maxDt: maxDt,
+      config: config,
     );
     if (t12 != null) {
       consider(
@@ -442,81 +465,6 @@ class CaromPhysicsEngine {
     }
 
     return best;
-  }
-
-  ({Vec2 cue, Vec2 obj1, Vec2 obj2}) _sanitizeInitialPositions({
-    required Vec2 cue,
-    required Vec2 obj1,
-    required Vec2 obj2,
-  }) {
-    final minSep = 2.0 * config.ballRadius + 1e-5;
-    Vec2 c = config.clampBallPositionMeters(cue);
-    Vec2 o1 = config.clampBallPositionMeters(obj1);
-    Vec2 o2 = config.clampBallPositionMeters(obj2);
-
-    ({Vec2 a, Vec2 b}) sep(Vec2 a, Vec2 b, double wA, double wB) {
-      final d = b - a;
-      final len = d.length;
-      if (len >= minSep) return (a: a, b: b);
-      final n = len > 1e-9 ? d / len : const Vec2(0.70710678, 0.70710678);
-      final overlap = minSep - len;
-      return (
-        a: config.clampBallPositionMeters(a - n * (overlap * wA)),
-        b: config.clampBallPositionMeters(b + n * (overlap * wB)),
-      );
-    }
-
-    for (int i = 0; i < 4; i++) {
-      final s12 = sep(o1, o2, 0.5, 0.5);
-      o1 = s12.a;
-      o2 = s12.b;
-      final sC1 = sep(c, o1, 1.0, 0.0);
-      c = sC1.a;
-      final sC2 = sep(c, o2, 1.0, 0.0);
-      c = sC2.a;
-    }
-
-    return (cue: c, obj1: o1, obj2: o2);
-  }
-
-  ({BallState cue, BallState obj1, BallState obj2}) _enforceMinimumSeparation({
-    required BallState cue,
-    required BallState obj1,
-    required BallState obj2,
-    required double ballRadius,
-  }) {
-    final minDist = 2.0 * ballRadius;
-    BallState c = cue;
-    BallState o1 = obj1;
-    BallState o2 = obj2;
-
-    ({BallState a, BallState b}) checkPair(BallState a, BallState b) {
-      final delta = b.position - a.position;
-      final dist = delta.length;
-      if (dist >= minDist - 1e-7) return (a: a, b: b);
-      final n = dist > 1e-9 ? delta / dist : Vec2.unitX;
-      final corr = (minDist - dist + 1e-7) * 0.5;
-      return (
-        a: a.copyWith(
-          position: config.clampBallPositionMeters(a.position - n * corr),
-        ),
-        b: b.copyWith(
-          position: config.clampBallPositionMeters(b.position + n * corr),
-        ),
-      );
-    }
-
-    final p1 = checkPair(c, o1);
-    c = p1.a;
-    o1 = p1.b;
-    final p2 = checkPair(c, o2);
-    c = p2.a;
-    o2 = p2.b;
-    final p3 = checkPair(o1, o2);
-    o1 = p3.a;
-    o2 = p3.b;
-
-    return (cue: c, obj1: o1, obj2: o2);
   }
 
   BallState _getBallById({
@@ -601,4 +549,3 @@ class _CandidateCollision {
       : isBallBall = false,
         ballB = null;
 }
-

@@ -38,6 +38,12 @@ class SimulationSnapshot {
     }
   }
 
+  /// Tổng động năng cơ học (tịnh tiến + quay 3D) của cả 3 bi trên bàn tại thời điểm `timestamp` (J).
+  double totalKineticEnergy(TableConfig config) =>
+      cueBall.kineticEnergy(config) +
+      objectBall1.kineticEnergy(config) +
+      objectBall2.kineticEnergy(config);
+
   static SimulationSnapshot interpolate(
     SimulationSnapshot a,
     SimulationSnapshot b,
@@ -62,8 +68,23 @@ class ShotEvaluation {
   /// Bi chủ có thực sự chạm cả 2 bi mục tiêu (Vàng & Đỏ) để ghi điểm Carom hợp lệ hay không.
   final bool hitsSecondBall;
 
+  /// Viên bi mục tiêu đầu tiên mà Bi chủ chạm phải (`BallId.object1` hoặc `BallId.object2`).
+  final BallId? firstObjectBallHit;
+
+  /// Độ dày chạm thực tế `f = 1 - sin(theta)` thuộc `[0, 1]` tại lần chạm đầu tiên giữa Bi chủ và Bi mục tiêu 1.
+  final double? firstObject1ContactFraction;
+
+  /// Dấu lệch bên thực tế tại lần chạm đầu tiên giữa Bi chủ và Bi mục tiêu 1 (`+1` má trái, `-1` má phải, `0` trực diện).
+  final double? firstObject1LateralSign;
+
   /// Số băng Bi chủ đã chạm trước khi chạm viên bi mục tiêu thứ hai (dùng cho 1 băng / 3 băng).
   final int cushionCountBeforeCarom;
+
+  /// Tổng số lần Bi mục tiêu 1 (Vàng) chạm băng trong suốt cú đánh.
+  final int objectBall1CushionCount;
+
+  /// Tổng số lần Bi chủ (Trắng) chạm băng trong suốt cú đánh.
+  final int cueBallCushionCount;
 
   /// Kết quả gom 3 bi vào vùng mục tiêu:
   /// - `null`: Bài học / hình bi không quy định `targetZoneCenter`.
@@ -77,7 +98,12 @@ class ShotEvaluation {
   const ShotEvaluation({
     required this.hitsFirstObjectBall,
     required this.hitsSecondBall,
+    this.firstObjectBallHit,
+    this.firstObject1ContactFraction,
+    this.firstObject1LateralSign,
     required this.cushionCountBeforeCarom,
+    this.objectBall1CushionCount = 0,
+    this.cueBallCushionCount = 0,
     required this.gathersInZone,
     required this.feedbackMessage,
   });
@@ -179,6 +205,17 @@ class SimulationResult {
     final hitsFirst = hitObj1 != null || hitObj2 != null;
     final hitsSecond = hitObj1 != null && hitObj2 != null;
 
+    BallId? firstObjectHit;
+    if (hitObj1 != null && hitObj2 != null) {
+      firstObjectHit = hitObj1.timestamp <= hitObj2.timestamp
+          ? BallId.object1
+          : BallId.object2;
+    } else if (hitObj1 != null) {
+      firstObjectHit = BallId.object1;
+    } else if (hitObj2 != null) {
+      firstObjectHit = BallId.object2;
+    }
+
     int cushionsBeforeCarom = 0;
     if (hitsSecond) {
       final secondHitTime = hitObj1.timestamp > hitObj2.timestamp
@@ -190,6 +227,15 @@ class SimulationResult {
             e.timestamp <= secondHitTime + 1e-6) {
           cushionsBeforeCarom++;
         }
+      }
+    }
+
+    int obj1Cushions = 0;
+    int cueCushions = 0;
+    for (final e in collisionEvents) {
+      if (e.type == CollisionType.ballCushion) {
+        if (e.primaryBall == BallId.object1) obj1Cushions++;
+        if (e.primaryBall == BallId.cue) cueCushions++;
       }
     }
 
@@ -234,10 +280,14 @@ class SimulationResult {
     return ShotEvaluation(
       hitsFirstObjectBall: hitsFirst,
       hitsSecondBall: hitsSecond,
+      firstObjectBallHit: firstObjectHit,
+      firstObject1ContactFraction: hitObj1?.effectiveContactFraction,
+      firstObject1LateralSign: hitObj1?.effectiveLateralSign,
       cushionCountBeforeCarom: cushionsBeforeCarom,
+      objectBall1CushionCount: obj1Cushions,
+      cueBallCushionCount: cueCushions,
       gathersInZone: gathers,
       feedbackMessage: feedback,
     );
   }
 }
-

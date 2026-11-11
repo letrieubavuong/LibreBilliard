@@ -131,5 +131,41 @@ class AimGeometry {
       collisionNormal: collisionNormal,
     );
   }
+
+  /// Suy ngược độ dày chạm thực tế `fraction` thuộc `[0, 1]` và dấu lệch bên `lateralSign`
+  /// từ một hướng ngắm tự do `aimDirection`. Trả về `null` nếu tia ngắm thẳng không giao với mặt cầu `2R` của bi mục tiêu.
+  static ({
+    double fraction,
+    double lateralSign,
+    double impactParameterMeters,
+  })? inferContactFromAimDirection({
+    required Vec2 cueBallPos,
+    required Vec2 objectBallPos,
+    required double ballRadius,
+    required Vec2 aimDirection,
+  }) {
+    if (aimDirection.lengthSquared <= 1e-12) return null;
+    final dir = aimDirection.normalized;
+    final toObj = objectBallPos - cueBallPos;
+    final forwardProj = toObj.dot(dir);
+    if (forwardProj <= 0.0) return null;
+
+    final twoR = 2.0 * ballRadius;
+    // Độ lệch có dấu của tâm Ghost Ball so với đường nối tâm along dir.perpCCW:
+    // dir = cos(beta)*e + lateralSign*sin(beta)*e.perpCCW => toObj . dir.perpCCW = -lateralSign * b
+    final signedPerp = -toObj.dot(dir.perpCCW);
+    final b = signedPerp.abs();
+    if (b >= twoR) return null;
+
+    final fraction = (1.0 - (b / twoR)).clamp(0.0, 1.0);
+    final lateralSign =
+        b <= 1e-5 ? 0.0 : (signedPerp >= 0.0 ? 1.0 : -1.0);
+
+    return (
+      fraction: fraction,
+      lateralSign: lateralSign,
+      impactParameterMeters: b,
+    );
+  }
 }
 

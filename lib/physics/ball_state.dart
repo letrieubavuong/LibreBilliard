@@ -1,3 +1,4 @@
+import 'table_config.dart';
 import 'vector_math.dart';
 
 /// Định danh 3 viên bi trong Billiard Carom.
@@ -64,6 +65,59 @@ class BallState {
         velocity.y + ballRadius * angularVelocity.x,
       );
 
+  /// Động năng tịnh tiến `1/2 * m * |v|^2` (J).
+  double translationalKineticEnergy(TableConfig config) =>
+      0.5 * config.ballMass * velocity.lengthSquared;
+
+  /// Động năng quay 3D `1/2 * I * |omega|^2` với `I = (2/5) * m * R^2` (J).
+  double rotationalKineticEnergy(TableConfig config) =>
+      0.5 * config.ballMomentOfInertia * angularVelocity.lengthSquared;
+
+  /// Tổng động năng cơ học (tịnh tiến + quay 3D) của viên bi (J).
+  double kineticEnergy(TableConfig config) =>
+      translationalKineticEnergy(config) + rotationalKineticEnergy(config);
+
+  /// Gia tốc tịnh tiến tức thời `a` (m/s^2) trên mặt vải bàn trong pha chuyển động hiện tại:
+  /// - Pha trượt (`|u| > 1e-5`): `a = -mu_s * g * u_hat` (hằng số suốt pha trượt).
+  /// - Pha lăn (`|u| <= 1e-5` và `|v| > 1e-5`): `a = -mu_r * g * v_hat` (hằng số suốt pha lăn).
+  /// - Đứng yên tịnh tiến: `a = 0`.
+  Vec2 linearAccelerationOnCloth(TableConfig config) {
+    final r = config.ballRadius;
+    final g = config.gravity;
+    final slip = clothSlipVelocity(r);
+    final slipSpeed = slip.length;
+    if (slipSpeed > 1e-5) {
+      if (config.slidingFriction <= 0.0) return Vec2.zero;
+      return -(slip / slipSpeed) * (config.slidingFriction * g);
+    }
+    final speed = velocity.length;
+    if (speed > 1e-5) {
+      if (config.rollingFriction <= 0.0) return Vec2.zero;
+      return -(velocity / speed) * (config.rollingFriction * g);
+    }
+    return Vec2.zero;
+  }
+
+  /// Thời gian chính xác (s) từ trạng thái hiện tại đến lần chuyển pha tiếp theo:
+  /// - Đang trượt (`|u| > 1e-5`): `t_roll = 2 * |u| / (7 * mu_s * g)`
+  /// - Đang lăn (`|u| <= 1e-5`, `|v| > 1e-5`): `t_stop = |v| / (mu_r * g)`
+  /// - Đứng yên hoặc ma sát bằng 0: `double.infinity`.
+  double timeToNextPhaseTransition(TableConfig config) {
+    final r = config.ballRadius;
+    final g = config.gravity;
+    final slipSpeed = clothSlipVelocity(r).length;
+    if (slipSpeed > 1e-5) {
+      if (config.slidingFriction <= 0.0) return double.infinity;
+      return slipSpeed / (3.5 * config.slidingFriction * g);
+    }
+    final speed = velocity.length;
+    if (speed > 1e-5) {
+      if (config.rollingFriction <= 0.0) return double.infinity;
+      return speed / (config.rollingFriction * g);
+    }
+    return double.infinity;
+  }
+
   bool get isMovingLinear => velocity.lengthSquared > 1e-8;
 
   bool get isSpinning => angularVelocity.lengthSquared > 1e-6;
@@ -126,4 +180,3 @@ class BallState {
     );
   }
 }
-
