@@ -143,7 +143,7 @@ class ShotParametersDetailPanel extends StatelessWidget {
                 onSpecChanged: onContactChanged,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: CueBallEffetDiagram(
                 spec: params.effet,
@@ -196,7 +196,10 @@ class ShotParametersDetailPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _SpeedBar(level: params.speedLevel),
+                  _SpeedBar(
+                    level: params.speedLevel,
+                    actualSpeed: params.effectiveCueSpeed,
+                  ),
                 ],
               ),
               if (mode == DiagramDisplayMode.interactive &&
@@ -231,16 +234,20 @@ class ShotParametersDetailPanel extends StatelessWidget {
 
 class _SpeedBar extends StatelessWidget {
   final int level; // 1..5
+  final double? actualSpeed;
 
-  const _SpeedBar({required this.level});
+  const _SpeedBar({required this.level, this.actualSpeed});
 
   @override
   Widget build(BuildContext context) {
+    final speedText = actualSpeed != null
+        ? '${actualSpeed!.toStringAsFixed(2)} m/s (Lực $level/5)'
+        : 'Lực $level/5';
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Lực $level/5',
+          speedText,
           style: const TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,

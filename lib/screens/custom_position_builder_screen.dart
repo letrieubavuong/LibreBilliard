@@ -322,7 +322,11 @@ class _CustomPositionBuilderScreenState
           const SizedBox(height: 8),
           ShotParametersDetailPanel(
             params: ShotParameters(
-              contact: _contact,
+              contact: (_useFreeAimHandle && solved.effectiveContact != null)
+                  ? solved.effectiveContact!
+                  : (_useFreeAimHandle
+                      ? BallContactSpec.full(description: 'Ngắm tự do (A-băng / Không chạm trực tiếp Bi 1)')
+                      : _contact),
               effet: _effet,
               strokeType: 'Kéo thanh trượt để chọn lực đánh thực tế',
               speedLevel: _speedLevel,

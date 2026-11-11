@@ -12,7 +12,7 @@ class LessonDetailScreen extends StatefulWidget {
   final String? personalNote;
   final VoidCallback onToggleBookmark;
   final VoidCallback onIncrementPractice;
-  final ValueChanged<String>? onSavePersonalNote;
+  final Future<bool> Function(String)? onSavePersonalNote;
 
   const LessonDetailScreen({
     super.key,
@@ -112,7 +112,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(6, 8, 6, 28),
         children: [
           // 1. Tiêu đề & Nhãn phân loại
           Text(
@@ -408,16 +408,30 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    widget.onSavePersonalNote?.call(_noteController.text.trim());
+                  onPressed: () async {
                     FocusScope.of(context).unfocus();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text('Đã lưu ghi chú cá nhân cho hình bi này!'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    final scaffold = ScaffoldMessenger.of(context);
+                    final saveFuture = widget.onSavePersonalNote?.call(_noteController.text.trim());
+                    final ok = saveFuture != null ? await saveFuture : true;
+                    if (!mounted) return;
+                    if (ok) {
+                      scaffold.showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Đã lưu ghi chú cá nhân cho hình bi này!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    } else {
+                      scaffold.showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Lỗi: Không thể lưu ghi chú vào bộ nhớ!'),
+                          backgroundColor: Colors.redAccent,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.save_outlined, size: 16),
                   label:
@@ -524,7 +538,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: BilliardPalette.cardBackground,
         borderRadius: BorderRadius.circular(14),

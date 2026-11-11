@@ -4,6 +4,7 @@ import '../../models/billiard_specs.dart';
 import '../../models/carom_physics_solver.dart';
 import '../../physics/billiard_physics.dart';
 import 'base_billiard_diagram.dart';
+import 'carom_table_canvas_layout.dart';
 
 /// Phần tử có thể kéo thả trực tiếp trên bàn trong chế độ Tự xếp hình bi (Position Builder)
 enum DraggableTableElement {
@@ -86,8 +87,20 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
   void paint(Canvas canvas, Size size) {
     final config = simulationResult?.config ?? TableConfig.standardCarom;
     final railThickness = railThicknessFor(mode);
-    final outerRect = Offset.zero & size;
     final maxLongUnits = halfTableCloseup ? 4.5 : 8.0;
+
+    final layout = CaromTableCanvasLayout(
+      canvasSize: size,
+      railThickness: railThickness,
+      maxLongUnits: maxLongUnits,
+      config: config,
+      flipLongRail: flipLongRail,
+      flipShortRail: flipShortRail,
+      halfTableCloseup: halfTableCloseup,
+    );
+
+    final outerRect = layout.outerRect;
+    final playRect = layout.playRect;
 
     // 1. Vẽ thành băng gỗ ngoài
     final woodPaint = Paint()..color = BilliardPalette.railWood;
@@ -97,14 +110,6 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
     );
 
     // 2. Vùng mặt bàn vải xanh bên trong
-    final bottomRail = halfTableCloseup ? railThickness * 0.45 : railThickness;
-    final playRect = Rect.fromLTRB(
-      railThickness,
-      railThickness,
-      size.width - railThickness,
-      size.height - bottomRail,
-    );
-
     const clothGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -159,19 +164,8 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
     );
 
     // Phép chiếu duy nhất từ tọa độ nút băng (dx: 0..8, dy: 0..4) sang Canvas
-    Offset diamondToCanvas(Offset rawDiamond) {
-      final dx = flipLongRail ? 8.0 - rawDiamond.dx : rawDiamond.dx;
-      final dy = flipShortRail ? 4.0 - rawDiamond.dy : rawDiamond.dy;
-      return Offset(
-        playRect.left + (dy / 4.0) * playRect.width,
-        playRect.top + (dx / maxLongUnits) * playRect.height,
-      );
-    }
-
-    Offset metersToCanvas(Vec2 metersPos) {
-      final d = config.metersToDiamond(metersPos);
-      return diamondToCanvas(Offset(d.x, d.y));
-    }
+    Offset diamondToCanvas(Offset rawDiamond) => layout.diamondToCanvas(rawDiamond);
+    Offset metersToCanvas(Vec2 metersPos) => layout.metersToCanvas(metersPos);
 
     // 3. Vẽ vạch kẻ Ô CẤM GÓC LIBRE (71cm × 35.5cm = 2.0 × 1.0 nút băng)
     if (spec.showCornerZones) {
@@ -226,7 +220,7 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
     _drawVerticalDiamonds(canvas, playRect, railThickness, maxLongUnits);
 
     // 5. Bán kính vẽ bi lấy trực tiếp từ bán kính vật lý R = 0.03075 m nhân với tỉ lệ khung nhìn
-    final pixelsPerMeter = playRect.width / config.widthMeters;
+    final pixelsPerMeter = layout.pixelsPerMeter;
     final ballRadius = config.ballRadius * pixelsPerMeter;
 
     canvas.save();
@@ -239,7 +233,7 @@ class CaromTablePainter extends BaseBilliardPainter<TableDiagramSpec> {
     if (!hideTrajectories) {
       if (spec.targetZoneCenter != null) {
         final zoneCenter = diamondToCanvas(spec.targetZoneCenter!);
-        final zoneRadius = (spec.targetZoneRadius / 4.0) * playRect.width;
+        final zoneRadius = config.diamondDistanceToMeters(spec.targetZoneRadius) * pixelsPerMeter;
 
         canvas.drawCircle(
           zoneCenter,
@@ -930,11 +924,13 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
   Offset _pixelToDiamond(Offset localPos, Size size) {
     final rail =
         CaromTablePainter.railThicknessFor(DiagramDisplayMode.interactive);
-    final playW = (size.width - rail * 2).clamp(1.0, double.infinity);
-    final playH = (size.height - rail * 2).clamp(1.0, double.infinity);
-    final shortRailDy = ((localPos.dx - rail) / playW) * 4.0;
-    final longRailDx = ((localPos.dy - rail) / playH) * 8.0;
-    return Offset(longRailDx, shortRailDy);
+    final layout = CaromTableCanvasLayout(
+      canvasSize: size,
+      railThickness: rail,
+      maxLongUnits: 8.0,
+      config: _config,
+    );
+    return layout.canvasToDiamond(localPos);
   }
 
   Offset _positionOfElement(DraggableTableElement element) {
@@ -992,6 +988,8 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
 
   /// Ràng buộc tọa độ kéo thả: nằm trong lòng bàn [R_d, 8 - R_d] x [R_d, 4 - R_d]
   /// và không chồng lấp lên 2 viên bi còn lại (`distance >= 2 * R_d`).
+  /// Sử dụng phép chiếu xen kẽ 16 chu kỳ kết hợp tìm kiếm nhị phân fallback để bi không bao giờ chồng lấp
+  /// ngay cả khi bị ép sát góc bàn.
   Offset _constrainDraggedPosition(
     DraggableTableElement element,
     Offset rawTarget,
@@ -1021,12 +1019,14 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
       if (element != DraggableTableElement.objectBall2) widget.spec.objectBall2,
     ];
 
-    final minSep = 2.0 * rD + 0.004;
-    for (int iter = 0; iter < 3; iter++) {
+    final minSep = 2.0 * rD + 0.005;
+    for (int iter = 0; iter < 16; iter++) {
+      bool anyCollision = false;
       for (final other in others) {
         final delta = pos - other;
         final dist = delta.distance;
         if (dist < minSep) {
+          anyCollision = true;
           final normal =
               dist > 1e-5 ? delta / dist : const Offset(0.7071, -0.7071);
           pos = Offset(
@@ -1035,7 +1035,27 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
           );
         }
       }
+      if (!anyCollision) break;
     }
+
+    // Binary search fallback nếu vẫn còn bi chạm nhau do kẹt góc bàn
+    bool stillColliding = others.any((o) => (pos - o).distance < minSep);
+    if (stillColliding) {
+      final safeStart = _positionOfElement(element);
+      Offset low = safeStart;
+      Offset high = pos;
+      for (int step = 0; step < 12; step++) {
+        final mid = Offset((low.dx + high.dx) / 2.0, (low.dy + high.dy) / 2.0);
+        final collides = others.any((o) => (mid - o).distance < minSep);
+        if (collides) {
+          high = mid;
+        } else {
+          low = mid;
+        }
+      }
+      pos = low;
+    }
+
     return pos;
   }
 
@@ -1043,7 +1063,7 @@ class _EditableCaromTableCanvasState extends State<_EditableCaromTableCanvas> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth.clamp(160.0, 340.0);
+        final width = constraints.maxWidth.clamp(160.0, 560.0);
         final height = width / 0.52;
         final size = Size(width, height);
 
@@ -1154,9 +1174,10 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
       widget.initialSpec,
       sim: sim,
     );
+    final totalDurationMs = ((0.28 + sim.durationSeconds) * 1000).round().clamp(500, 25000);
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: Duration(milliseconds: totalDurationMs),
     )..addListener(() {
         setState(() {});
       });
@@ -1176,6 +1197,8 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
         sim: sim,
         flipLongRail: _flipLongRail,
       );
+      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(500, 50000);
+      _controller.duration = Duration(milliseconds: totalDurationMs);
     }
   }
 
@@ -1188,7 +1211,9 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
   void _updateSpeed(bool slow) {
     setState(() {
       _slowMotion = slow;
-      _controller.duration = Duration(milliseconds: _slowMotion ? 5200 : 2600);
+      final sim = _resolveSimulation();
+      final totalDurationMs = ((0.28 + sim.durationSeconds) * (_slowMotion ? 2000 : 1000)).round().clamp(500, 50000);
+      _controller.duration = Duration(milliseconds: totalDurationMs);
     });
     if (_controller.isAnimating) {
       _controller.forward(from: _controller.value);
@@ -1276,11 +1301,8 @@ class _InteractiveCaromTableBodyState extends State<_InteractiveCaromTableBody>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 340,
-            maxHeight: effectiveHalf ? 410 : 580,
-          ),
+        SizedBox(
+          width: double.infinity,
           child: AspectRatio(
             aspectRatio: effectiveHalf ? 0.85 : 0.52,
             child: CustomPaint(

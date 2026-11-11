@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _persistCurrentNotebookState() async {
+  Future<bool> _persistCurrentNotebookState() async {
     final snapshot = NotebookPersistedState(
       bookmarkedIds: Set<String>.from(_bookmarkedIds),
       practiceCounts: Map<String, int>.from(_practiceCounts),
@@ -79,7 +79,16 @@ class _HomeScreenState extends State<HomeScreen> {
       customLessons: List<BilliardLesson>.from(_customLessons),
       customLessonCounter: _customLessonCounter,
     );
-    await widget.storage.saveState(snapshot);
+    final ok = await widget.storage.saveState(snapshot);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lỗi: Không thể lưu dữ liệu sổ tay vào bộ nhớ thiết bị!'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+    return ok;
   }
 
   void _toggleBookmark(String id) {
@@ -121,7 +130,10 @@ class _HomeScreenState extends State<HomeScreen> {
           personalNote: _personalNotes[lesson.id],
           onToggleBookmark: () => _toggleBookmark(lesson.id),
           onIncrementPractice: () => _incrementPractice(lesson.id),
-          onSavePersonalNote: (note) => _savePersonalNote(lesson.id, note),
+          onSavePersonalNote: (note) async {
+            _savePersonalNote(lesson.id, note);
+            return await _persistCurrentNotebookState();
+          },
         ),
       ),
     );
@@ -153,15 +165,17 @@ class _HomeScreenState extends State<HomeScreen> {
         _bookmarkedIds.add(created.id);
         _customLessonCounter++;
       });
-      await _persistCurrentNotebookState();
+      final ok = await _persistCurrentNotebookState();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Đã lưu "${created.title}" vào Sổ tay & ${created.category.title}!',
+        if (ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Đã lưu "${created.title}" vào Sổ tay & ${created.category.title}!',
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     }
   }

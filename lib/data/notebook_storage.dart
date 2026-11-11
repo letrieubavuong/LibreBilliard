@@ -131,23 +131,46 @@ class NotebookStorage {
           dir.createSync(recursive: true);
           return File('$androidAppDir/notebook_state_v1.json');
         }
-      } catch (_) {
-        // Fallback xuống thư mục tạm hệ thống nếu không truy cập được thư mục gói
-      }
+      } catch (_) {}
     }
 
-    final fallbackDir = Directory(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}xavier_billiard_libre',
-    );
+    // Windows: %LOCALAPPDATA% or %APPDATA%
+    final localAppData = Platform.environment['LOCALAPPDATA'] ??
+        Platform.environment['APPDATA'];
+    if (localAppData != null && localAppData.isNotEmpty) {
+      final appDir = Directory(
+        '$localAppData${Platform.pathSeparator}XavierBilliardLibre',
+      );
+      if (!appDir.existsSync()) {
+        appDir.createSync(recursive: true);
+      }
+      return File('${appDir.path}${Platform.pathSeparator}notebook_state_v1.json');
+    }
+
+    // macOS/Linux: HOME/.local/share or Library
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'];
+    if (home != null && home.isNotEmpty) {
+      final baseDir = Platform.isMacOS
+          ? '$home/Library/Application Support/XavierBilliardLibre'
+          : '$home/.local/share/xavier_billiard_libre';
+      final appDir = Directory(baseDir);
+      if (!appDir.existsSync()) {
+        appDir.createSync(recursive: true);
+      }
+      return File('${appDir.path}${Platform.pathSeparator}notebook_state_v1.json');
+    }
+
+    // Fallback: working directory data/
+    final fallbackDir = Directory('data');
     if (!fallbackDir.existsSync()) {
       fallbackDir.createSync(recursive: true);
     }
-    return File(
-      '${fallbackDir.path}${Platform.pathSeparator}notebook_state_v1.json',
-    );
+    return File('data/notebook_state_v1.json');
   }
 
-  /// Đọc dữ liệu Sổ tay đã lưu; trả về mặc định an toàn nếu chưa có file hoặc JSON bị lỗi.
+  /// Đọc dữ liệu Sổ tay đã lưu; nếu file hỏng (JSON parse error) thì backup thành `.corrupted.bak`
+  /// trước khi trả về mặc định; nếu file có schemaVersion tương lai thì không ghi đè.
   Future<NotebookPersistedState> loadState() async {
     try {
       final file = _resolveStorageFileSync();
@@ -158,14 +181,37 @@ class NotebookStorage {
       if (rawContent.trim().isEmpty) {
         return NotebookPersistedState.initialDefaults();
       }
-      final decoded = jsonDecode(rawContent);
-      if (decoded is Map<String, dynamic>) {
-        return NotebookPersistedState.fromJson(decoded);
-      } else if (decoded is Map) {
-        return NotebookPersistedState.fromJson(
-          Map<String, dynamic>.from(decoded),
-        );
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(rawContent);
+      } catch (parseError) {
+        // Sao lưu file hỏng thành .corrupted.bak để người dùng không mất dữ liệu thô
+        try {
+          final bakFile = File('${file.path}.corrupted.bak');
+          bakFile.writeAsStringSync(rawContent, flush: true);
+        } catch (_) {}
+        return NotebookPersistedState.initialDefaults();
       }
+
+      if (decoded is Map<String, dynamic> || decoded is Map) {
+        final map = decoded is Map<String, dynamic>
+            ? decoded
+            : Map<String, dynamic>.from(decoded as Map);
+
+        final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
+        if (version > NotebookPersistedState.currentSchemaVersion) {
+          // Phiên bản dữ liệu mới hơn ứng dụng hiện tại -> bảo lưu file, không ghi đè hạ cấp
+          try {
+            final futureBak = File('${file.path}.future_v$version.bak');
+            futureBak.writeAsStringSync(rawContent, flush: true);
+          } catch (_) {}
+          return NotebookPersistedState.fromJson(map);
+        }
+
+        return NotebookPersistedState.fromJson(map);
+      }
+
       return NotebookPersistedState.initialDefaults();
     } catch (_) {
       return NotebookPersistedState.initialDefaults();
