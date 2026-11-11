@@ -1,0 +1,105 @@
+LIBREBILLIARD — KIỂM TRA LẠI LẦN 4
+Ngày: 11/11/2026
+Commit: aee5ba441eaa94c4968c687153d8f0852ad6fdff
+So với lần 3: f89598ffab96801281c8aeca899ac47bc453efd8 → thêm 1 commit.
+Repo: https://github.com/letrieubavuong/LibreBilliard
+
+KẾT LUẬN
+Các sửa đổi quan trọng của lần 3 đã được triển khai đúng hướng. Nên giữ nền hiện tại, đóng các lỗi trong fixture và bàn giao APK thử nghiệm; chưa đủ chứng cứ gọi toàn bộ bài học đã được nghiệm thu vật lí thực tế.
+Không yêu cầu viết lại engine hoặc quay lại mô hình băng 3D: phương án băng rút gọn đã được công bố và có thể chấp nhận trong phạm vi giới hạn rõ ràng.
+
+PHẠM VI THỰC HIỆN
+Đọc mã và diff tại SHA cố định, đối chiếu báo cáo lần 3 đính kèm, AGENTS.md và quy trình kiểm chứng trong repo. Chưa chạy Flutter/Dart vì không có SDK ở môi trường review; chưa cài APK. Những kết luận về code/test dưới đây là review tĩnh, không phải log test fail/pass do người review chạy.
+Actions API trả 0 workflow runs; Releases API trả rỗng. Cây mã nguồn không chứa APK hay raw log analyze/test/build. Báo cáo tác giả có ghi đã analyze/test/build; hiện chưa có tệp/log tương ứng để độc lập đối chiếu.
+
+1. NHỮNG ĐIỂM ĐÃ SỬA — GHI NHẬN ĐỂ KHÔNG LÀM LẠI
+- Mô hình băng đã được gọi đúng là planar dissipative/2.5D, có công bố giới hạn; không còn mô tả nó như giải mũi băng 3D đầy đủ.
+- CCD đã bổ sung tìm nghiệm cực trị bậc 3 qua findCubicRoots và đưa vào phân đoạn tìm nghiệm. Đây là thay đổi thuật toán thực, không chỉ đổi tên test.
+- Storage đã dùng path_provider, trạng thái read-only và write guard kiểm schema trên file trước khi ghi. Lỗi ghi đè schema tương lai cũ đã có chặn ở tầng storage.
+- Callback ghi chú đã bỏ ghi đôi.
+- Timeline painter dùng elapsedSeconds rồi trừ 0.28 giây chuẩn bị cơ; controller dùng T+0.28. Lỗi dành cố định 10% đã được sửa.
+- Test kéo góc đã gọi đúng constrainBallPosition đang dùng ở editor; smoke test đã tap KT-01 và assert LessonDetailScreen.
+- Đã khôi phục test giải tích trượt/lăn, trực diện/xiên và true-miss.
+- KT-01 đã khôi phục radius=0.58 diamond; KT-04 được đánh isPhysicsVerified=false.
+
+2. P1 — FIXTURE ĐANG ĐO SAI KHOẢNG KÉO LÙI / ĐẨY TỚI
+File: lib/models/lesson_verification_fixture.dart:108–122.
+Code lấy pInit=initialSnapshot (trước khi ra cơ), pFinal=finalSnapshot, rồi cueDisplacement=|pFinal-pInit|. Phép đo này không biết bi đi tới hay lùi, và bao gồm cả đoạn chạy trước khi chạm bi 1.
+Ví dụ 1D:
+  - Bắt đầu x=0, chạm ở x=0.4, dừng ở x=0.2: kéo lùi sau chạm 20cm, fixture đo 20cm.
+  - Bắt đầu x=0, chạm ở x=0.1, dừng ở x=0.2: chỉ tiến sau chạm 10cm, fixture cũng đo 20cm.
+Hai kỹ thuật ngược nhau cùng thỏa giới hạn 15–25cm hiện tại. Vì vậy PASS của KT-01 chưa xác nhận đúng trô ngắn.
+
+Sửa cụ thể:
+- Lấy vị trí tại lần chạm bi mục tiêu 1 và hướng vận tốc vào ngay trước chạm làm mốc.
+- Đo độ dời có dấu theo hướng vào sau chạm; cú kéo cần có đoạn vận tốc/độ dời ngược hướng vào. Công khai đo cực đại lùi, vị trí dừng hay độ dài đường đi, không gọi chung là quãng đường.
+- Nếu bi chủ còn chạm bi đỏ/băng về sau, giới hạn đúng đoạn kỹ thuật đang kiểm tra để không lẫn chuyển động sau sự kiện khác.
+- Viết negative test: đường chỉ tiến phải fail fixture trô, dù khoảng cách start→final nằm trong 15–25cm.
+
+3. P1 — FIXTURE CÓ THỂ BỎ QUA TIÊU CHÍ KHI THIẾU DỮ LIỆU
+File: lesson_verification_fixture.dart:73–90,131–133.
+- Má chạm chỉ được so khi expectedLateralSign và actual đều khác null. Nếu yêu cầu má trái nhưng actual=null thì không thêm failure.
+- Độ dày chỉ được kiểm khi actual fraction khác null. Thiếu số đo không được coi là đạt.
+- expectTargetZoneGather=true chỉ fail khi gathersInZone==false. Nếu không có vùng gom và kết quả null thì đi qua tiêu chí này.
+
+Sửa cụ thể:
+- Expected được bật mà actual thiếu/null → fail với lý do missing measurement/not applicable.
+- Gom được yêu cầu → bắt buộc gathersInZone==true, có vùng hợp lệ và mô phỏng đã dừng.
+- Viết unit tests tạo result thiếu fraction/má/vùng gom để bảo đảm fixture fail thay vì bỏ qua.
+
+4. P1 — THÊM FILE FIXTURE CHƯA ĐỒNG NGHĨA PHỦ ĐỦ KỸ THUẬT TỪNG BÀI
+File: lesson_verification_fixture.dart, danh mục fixtures.
+- expectedYellowCushionBounces chỉ được đặt ở KT-01.
+- KT-03 mô tả vàng 2 băng nhưng fixture chưa buộc đúng 2 băng.
+- GB-01/GB-02/GB-04 mô tả 1/2 băng nhưng các trường số băng tương ứng chưa được đặt đầy đủ.
+- BS-04 “tia góc 2 băng” chưa đặt số băng tối thiểu; mặc định 0.
+- BS-02 nội dung ngắn–dài–dài nhưng chỉ kiểm số băng >=2; chưa kiểm chuỗi thành băng.
+- SR-02/SR-03 mới kiểm carom/gom chung, chưa đo việc vượt vạch/ra ô theo mục tiêu bài.
+
+Sửa cụ thể:
+Tạo bảng yêu cầu theo từng lesson code: chuỗi sự kiện cần có, loại băng, thời điểm cắt đoạn, độ dày/má, cự ly, vùng gom, điều kiện bi đích. Tham số nào “không áp dụng” phải có lý do, không để null vì chưa đo. Không gắn verified chỉ vì fixture bỏ các trường khó kiểm.
+
+5. P1 — TEST CCD GRAZING / HỘI TỤ VẪN CHƯA CHẠY ĐÚNG TÌNH HUỐNG ĐƯỢC BÁO CÁO
+File: test/physics_engine_test.dart:229–314.
+- Test4 dùng dp0/dv0/da của phản ví dụ để kiểm findCubicRoots và f cực tiểu âm. Nhưng đoạn gọi findBallBallImpactTime lại dùng hai bi trực diện khác, không truyền chính trạng thái grazing đó vào CCD.
+- Test5 chỉ gọi findBallBallImpactTime trên cùng trạng thái với maxDt=0.5 và 0.25, rồi so cùng nghiệm. Không chạy CaromPhysicsEngine với timeStepSeconds=dt,dt/2,dt/4; không có mức dt/4; chưa chứng minh bậc hội tụ O(dt²).
+
+Sửa cụ thể:
+- Dựng trạng thái BallState có v/omega cho đúng gia tốc da của ca grazing, gọi trực tiếp CCD, advance đến nghiệm và kiểm khoảng cách/approaching.
+- Chạy cùng ShotInput bằng 3 engine có bước 0.001,0.0005,0.00025s; đối chiếu thời điểm va chạm, vận tốc và vị trí cuối, có băng và chuyển pha.
+- Nếu vẫn giữ test maxDt hiện tại thì đổi tên thành consistency of query window, không gọi convergence.
+- Không khẳng định 100% mọi ca floating-point chỉ từ Cardano và vài case; nêu miền và dung sai đã kiểm thực tế.
+
+6. P1 — CẦN DI CHUYỂN SỔ TAY CŨ KHI ĐỔI THƯ MỤC LƯU
+File: lib/data/notebook_storage.dart:135–156,198–203.
+Code mới lấy getApplicationDocumentsDirectory rồi nếu chưa có file thì trả defaults. Không tìm/migrate file ở đường lưu cũ trước khi trả mặc định.
+Nếu thư mục do path_provider trả khác /data/data/com.example.xavier_billiard_libre/files hoặc đường desktop cũ, người dùng cập nhật app sẽ thấy sổ tay trống dù file cũ còn. Đây là nguy cơ thay đổi đường lưu, không khẳng định dữ liệu đã bị xóa vật lí.
+
+Sửa cụ thể:
+Khi file mới chưa tồn tại, kiểm đường legacy đã từng dùng trên nền tảng đó, validate/copy nguyên tử, giữ bản cũ và schema guard, không ghi defaults lên trên dữ liệu tìm thấy. Thêm test migration từ thư mục cũ sang thư mục mới. Migration idempotent và không hạ cấp schema.
+
+7. P2 — READ-ONLY CHƯA ĐƯỢC GIỮ TRONG STATE UI
+File: home_screen.dart:54–83,86–94.
+HomeScreen chỉ hiện thông báo loaded.isReadOnly rồi không lưu cờ. Snapshot gửi saveState được tạo với isReadOnly mặc định false. Disk guard vẫn chặn ghi, nên không còn lỗi phá file tương lai cũ, nhưng UI vẫn cho đổi bookmark/ghi chú rồi báo lỗi I/O chung.
+Sửa: giữ cờ/reason trong State, khóa hoặc giải thích các thao tác sửa, không thay đổi model hiển thị như đã lưu khi không được phép ghi.
+
+8. BẰNG CHỨNG NGHIỆM THU VÀ SỐ LƯỢNG BÀI
+Mình đếm trực tiếp dữ liệu hiện tại: 15 bài (4 KT,4 GB,4 BS,3 SR), trong đó 14 cờ true và KT-04 false. Báo cáo ghi 13 bài /12 verified chưa khớp. Một số báo cáo review trước cũng lặp lại số 13 từ tài liệu; số đếm hiện tại trong code là căn cứ sửa báo cáo.
+Docs ghi đã chạy analyze/test/build và APK nằm ở build/app/outputs/flutter-apk/app-debug.apk. Đây là đường cục bộ trên máy tác giả, chưa phải tệp người dùng tải được. Không thấy APK, raw log, checksum hoặc artifact release qua nguồn GitHub đã kiểm.
+Yêu cầu cung cấp:
+- APK gắn đúng SHA, checksum SHA256, version/build.
+- Raw output flutter --version, flutter analyze, flutter test, flutter build apk --debug (gắn mốc mã nguồn kiểm tra).
+- Bảng ca test đầu vào/kết quả/dung sai; video các thế KT-01,cu-lê,hụt,chạm mỏng,ép-phê qua băng.
+- Dùng “verified nội bộ mô hình” và “đã đối chiếu bàn thật” như hai mức chứng nhận riêng. Hiện chưa có bằng chứng thực nghiệm để gộp hai mức này.
+
+LỆNH SỬA TẬP TRUNG GỬI GEMINI
+Tiếp tục trên branch riêng từ aee5ba441eaa94c4968c687153d8f0852ad6fdff. Giữ những phần đã sửa đúng: phạm vi băng2.5D, cubic extrema CCD, schema write guard, path_provider, uniform scale và elapsed timeline.
+1. Sửa fixture đo kéo/đẩy theo đoạn SAU va chạm và có dấu, thêm ca forward-only phải fail bài trô.
+2. Expected tiêu chí có bật mà actual null phải fail. Gom được yêu cầu phải ==true, không chấp nhận null.
+3. Điền yêu cầu số băng/chuỗi băng và kỹ thuật thật cho từng bài KT/GB/BS/SR; cập nhật verified theo kết quả đủ tiêu chí, không bỏ trống trường để được PASS.
+4. Chạy ca grazing thật qua CCD, bổ sung 3 engine dt/dt2/dt4 để đo hội tụ. Giữ test query-window nếu muốn nhưng đặt tên đúng.
+5. Migration file sổ tay legacy sang path_provider có kiểm schema, backup và không ghi defaults trước khi tìm dữ liệu cũ. Giữ read-only trong UI.
+6. Cập nhật số bài thành 15, số cờ hiện tại14true/1false hoặc số nghiệm thu thực sau khi chạy lại. Không giữ số12/13 không khớp code.
+7. Bàn giao APK tải được + SHA256 + log analyze/test/build + video kiểm thử. Không chỉ ghi đường build cục bộ trong báo cáo. Nếu thiếu công cụ hoặc có test fail, ghi đúng trạng thái.
+
+Không có thay đổi repo nào được thực hiện trong lượt review này.

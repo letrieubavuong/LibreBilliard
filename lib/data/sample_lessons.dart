@@ -110,7 +110,7 @@ class SampleLessonsRepository {
       category: LessonCategory.technique,
       subCategory: 'Kiểm soát lực',
       difficulty: 'Trung cấp',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Amorti giữ bi chủ ở lại vùng gom',
         description:
@@ -209,7 +209,7 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 1 băng',
       difficulty: 'Cơ bản',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       diagram: const TableDiagramSpec(
         label: 'Hình gom 1 băng dài kinh điển (Xavier Gretillat)',
         description:
@@ -257,7 +257,7 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 2 băng',
       difficulty: 'Trung cấp',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Gom bi Chữ thập (Croisé)',
         description:
@@ -354,7 +354,7 @@ class SampleLessonsRepository {
       category: LessonCategory.gathering,
       subCategory: 'Gom bi 2 băng',
       difficulty: 'Trung cấp',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       diagram: const TableDiagramSpec(
         label: 'Sơ đồ Gom bi Dọc bàn (Khứ hồi băng ngắn)',
         description:
@@ -459,7 +459,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống Ngắn - Dài',
       difficulty: 'Trung cấp',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       systemFormula:
           'Điểm Ngắm (Băng dài 1) = Điểm Xuất phát (Băng ngắn) + 2 nút',
       diagram: const TableDiagramSpec(
@@ -561,7 +561,7 @@ class SampleLessonsRepository {
       category: LessonCategory.system,
       subCategory: 'Hệ thống 2 băng',
       difficulty: 'Trung cấp',
-      isPhysicsVerified: true,
+      isPhysicsVerified: false,
       systemFormula:
           'Ngắm nút 10–15 băng dài với 2 Ép-phê thuận → Ra đúng mép vạch ô cấm góc',
       diagram: const TableDiagramSpec(

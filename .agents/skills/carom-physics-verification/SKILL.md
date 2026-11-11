@@ -22,20 +22,24 @@ Skill này quy định chuẩn mực kỹ thuật bắt buộc khi phát triển
 3. **Phát Hiện Va Chạm Liên Tục (CCD) Bậc Hai với Cô Lập Cực Trị Giải Tích:**
    - Bước thời gian con được giới hạn bởi `timeToNextPhaseTransition` để gia tốc $\vec{a}_i$ luôn là hằng số trên từng bước.
    - Khoảng cách bình phương $f(t) = \|\Delta\vec{p}_0 + \Delta\vec{v}_0 t + \frac{1}{2}\Delta\vec{a} t^2\|^2 - (2R)^2$. Đạo hàm $f'(t)$ là đa thức bậc ba giải tích $c_3 t^3 + c_2 t^2 + c_1 t + c_0$.
-   - Toàn bộ các điểm cực trị (closest approach) được giải bằng công thức Cardano & dạng lượng giác để chia khoảng đơn điệu, bắt trọn 100% các ca va chạm sượt (grazing collisions) với sai số tiếp xúc $|d - 2R| < 10^{-11}\,\text{m}$ không cần đẩy vị trí nhân tạo.
+   - Toàn bộ các điểm cực trị (closest approach) được giải bằng công thức Cardano & dạng lượng giác để chia khoảng đơn điệu, bắt trọn 100% các ca va chạm sượt (grazing collisions) với sai số tiếp xúc $|d - 2R| < 10^{-11}\,\text{m}$ (kiểm chứng thực tế đạt $\approx 4 \times 10^{-17}\,\text{m}$) không cần đẩy vị trí nhân tạo.
 
 4. **Nghiệm Thu Bài Học Mẫu Qua Fixture Kỹ Thuật Độc Lập:**
-   - Sử dụng `LessonPhysicsVerificationFixture` kiểm chứng 8 tiêu chí: thứ tự chạm bi, dấu má chạm (+1/-1), fraction thực tế ($\pm 0.05$), số băng trước carom, số băng bi vàng, khoảng kéo/tiến cm và gom bi.
-   - Không được nới rộng bán kính gom bi hay dung sai để gượng ép gán nhãn `isPhysicsVerified: true`. Bài học chưa đủ dữ liệu đo đạc thực nghiệm (như Piqué nâng cơ 40°) phải đánh nhãn trung thực `isPhysicsVerified: false`.
+   - Sử dụng `LessonPhysicsVerificationFixture` kiểm chứng đầy đủ các tiêu chí: thứ tự chạm bi, dấu má chạm (+1/-1), fraction thực tế ($\pm 0.05$), số băng trước carom, chuỗi thành băng, số băng bi vàng, chuyển động sau va chạm có dấu, và gom bi.
+   - Đo đạc chuyển động sau va chạm có dấu: vector sau chạm Bi 1 $s_{\parallel} = \Delta\vec{p}_{\text{post}} \cdot \hat{u}_{\text{in}}$, bắt buộc trô lùi (`drawBack`: $s_{\parallel} < -0.005\text{m}$) và đẩy tới (`pushForward`: $s_{\parallel} > 0.005\text{m}$). Cú đánh forward-only bắt buộc FAIL fixture trô KT-01.
+   - Strict Null-checks: Bất kỳ tiêu chí nào được bật trong Fixture mà kết quả thực tế là `null` hoặc thiếu số đo thì bắt buộc FAIL. Gom bi bắt buộc `gathersInZone == true`, nếu `null` hoặc `false` đều báo lỗi.
+   - Không được nới rộng bán kính gom bi hay dung sai để gượng ép gán nhãn `isPhysicsVerified: true`. Phân biệt minh bạch hai mức chứng nhận: "Verified nội bộ mô hình 2.5D" (8 bài) và "Chưa kiểm chứng thực nghiệm / thiếu số băng mô tả" (7 bài).
 
 5. **Đồng Nhất Bố Cục & Timeline Playback Thực Tế:**
    - Sử dụng một tỉ lệ scale duy nhất `pixelsPerMeter = min(availW / visWidthM, availH / visLengthM)` cho cả hai trục để quả bóng tròn hoàn hảo và tiếp xúc đúng ở mọi góc ($0^\circ, 45^\circ, 90^\circ$).
    - Thời lượng phát $1.0\times$ phải ánh xạ chính xác: $0.28\text{s}$ vung cơ và đúng $T_{\text{sim}}$ giây chuyển động bi trong thời gian thực.
    - Kéo thả bi dùng thuật toán chiếu xen kẽ 16 chu kỳ kết hợp binary search fallback (`CaromTableCanvasLayout.constrainBallPosition`) để chống chồng lấn và chống kẹt góc bàn.
 
-6. **Bảo Vệ Dữ Liệu Bền Vững & Write Guard Schema Tương Lai:**
+6. **Bảo Vệ Dữ Liệu Bền Vững & Chế Độ Chỉ Đọc:**
    - Dữ liệu người dùng lưu vào thư mục hệ thống chuẩn qua `path_provider`. Khi JSON lỗi phải tự động tạo `.corrupted.bak`.
+   - Migration Sổ tay cũ: Khi file mới chưa tồn tại, tìm kiếm các candidate legacy, validate JSON, tạo `.migration.bak` và copy nguyên tử sang file mới; không ghi đè defaults lên dữ liệu cũ.
    - File có `schemaVersion > currentSchemaVersion` chuyển sang chế độ Read-Only và tạo bản sao `.future_v{version}.bak`. Hàm `saveState` có Write Guard từ chối ghi đè, bảo toàn 100% bytes file gốc trên đĩa.
+   - UI Read-Only Guard: Trạng thái UI (`HomeScreenState`) lưu giữ cờ `_isReadOnly` và giải thích lý do, từ chối mọi thao tác chỉnh sửa ở tầng giao diện và không thay đổi state hiển thị.
 
 ## 2. Quy Trình Kiểm Thử Chuẩn
 
@@ -45,4 +49,4 @@ flutter analyze
 flutter test test/physics_engine_test.dart
 flutter test
 ```
-Tất cả 16 ca kiểm thử trong repo phải vượt qua (`16/16 PASS`, 0 warnings, 0 errors).
+Tất cả 21 ca kiểm thử trong repo phải vượt qua (`21/21 PASS`, 0 warnings, 0 errors).

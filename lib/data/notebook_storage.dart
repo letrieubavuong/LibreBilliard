@@ -193,11 +193,81 @@ class NotebookStorage {
     return File('data/notebook_state_v1.json');
   }
 
+  /// Danh sách các đường dẫn lưu trữ legacy từng được sử dụng để di chuyển dữ liệu (migration).
+  List<File> _getLegacyStorageCandidates() {
+    final candidates = <File>[];
+
+    // 1. Android legacy files
+    if (Platform.isAndroid) {
+      candidates.add(
+        File('/data/data/com.example.xavier_billiard_libre/files/notebook_state_v1.json'),
+      );
+    }
+
+    // 2. Windows LocalAppData / AppData
+    final localAppData = Platform.environment['LOCALAPPDATA'] ??
+        Platform.environment['APPDATA'];
+    if (localAppData != null && localAppData.isNotEmpty) {
+      candidates.add(
+        File('$localAppData${Platform.pathSeparator}XavierBilliardLibre${Platform.pathSeparator}notebook_state_v1.json'),
+      );
+    }
+
+    // 3. MacOS / Linux
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'];
+    if (home != null && home.isNotEmpty) {
+      candidates.add(
+        File('$home/Library/Application Support/XavierBilliardLibre/notebook_state_v1.json'),
+      );
+      candidates.add(
+        File('$home/.local/share/xavier_billiard_libre/notebook_state_v1.json'),
+      );
+    }
+
+    // 4. Fallback data folder
+    candidates.add(File('data/notebook_state_v1.json'));
+
+    return candidates;
+  }
+
   /// Đọc dữ liệu Sổ tay đã lưu; nếu file hỏng (JSON parse error) thì backup thành `.corrupted.bak`
   /// trước khi trả về mặc định; nếu file có schemaVersion tương lai thì không ghi đè và chuyển chế độ Read-Only.
   Future<NotebookPersistedState> loadState() async {
     try {
       final file = await resolveStorageFile();
+
+      // Nếu file mới tại path_provider chưa tồn tại, tìm kiếm và di chuyển dữ liệu (migration) từ thư mục legacy
+      if (!file.existsSync() && overrideFile == null) {
+        for (final legacy in _getLegacyStorageCandidates()) {
+          try {
+            if (legacy.path != file.path && legacy.existsSync()) {
+              final legacyRaw = legacy.readAsStringSync();
+              if (legacyRaw.trim().isNotEmpty) {
+                // Kiểm tra tính hợp lệ của JSON trước khi copy
+                final decoded = jsonDecode(legacyRaw);
+                if (decoded is Map) {
+                  // Giữ nguyên file cũ kèm bản sao .migration.bak
+                  try {
+                    final migBak = File('${legacy.path}.migration.bak');
+                    migBak.writeAsStringSync(legacyRaw, flush: true);
+                  } catch (_) {}
+
+                  // Copy nguyên tử sang thư mục mới
+                  if (!file.parent.existsSync()) {
+                    file.parent.createSync(recursive: true);
+                  }
+                  final tmp = File('${file.path}.migrating.tmp');
+                  tmp.writeAsStringSync(legacyRaw, flush: true);
+                  tmp.renameSync(file.path);
+                  break;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
       if (!file.existsSync()) {
         return NotebookPersistedState.initialDefaults();
       }

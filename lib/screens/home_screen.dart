@@ -40,6 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
     'kt-01': 'Cầu tay đặt sát 10cm, dừng ngọn cơ ngay sau khi chạm bi chủ.',
   };
 
+  bool _isReadOnly = false;
+  String? _readOnlyReason;
+
   List<BilliardLesson> get _allLessons => [
         ..._customLessons,
         ...SampleLessonsRepository.lessons,
@@ -55,6 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final loaded = await widget.storage.loadState();
     if (!mounted) return;
     setState(() {
+      _isReadOnly = loaded.isReadOnly;
+      _readOnlyReason = loaded.readOnlyReason;
       _bookmarkedIds
         ..clear()
         ..addAll(loaded.bookmarkedIds);
@@ -83,6 +88,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  bool _checkReadOnlyGuard() {
+    if (_isReadOnly) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _readOnlyReason ??
+                  'Sổ tay đang ở chế độ chỉ đọc. Không thể chỉnh sửa hoặc lưu thay đổi.',
+            ),
+            backgroundColor: Colors.amber.shade900,
+          ),
+        );
+      }
+      return true;
+    }
+    return false;
+  }
+
   Future<bool> _persistCurrentNotebookState() async {
     final snapshot = NotebookPersistedState(
       bookmarkedIds: Set<String>.from(_bookmarkedIds),
@@ -90,6 +113,8 @@ class _HomeScreenState extends State<HomeScreen> {
       personalNotes: Map<String, String>.from(_personalNotes),
       customLessons: List<BilliardLesson>.from(_customLessons),
       customLessonCounter: _customLessonCounter,
+      isReadOnly: _isReadOnly,
+      readOnlyReason: _readOnlyReason,
     );
     final ok = await widget.storage.saveState(snapshot);
     if (!ok && mounted) {
@@ -104,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _toggleBookmark(String id) {
+    if (_checkReadOnlyGuard()) return;
     setState(() {
       if (_bookmarkedIds.contains(id)) {
         _bookmarkedIds.remove(id);
@@ -115,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _incrementPractice(String id) {
+    if (_checkReadOnlyGuard()) return;
     setState(() {
       _practiceCounts[id] = (_practiceCounts[id] ?? 0) + 1;
     });
@@ -122,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<bool> _savePersonalNote(String id, String note) async {
+    if (_checkReadOnlyGuard()) return false;
     setState(() {
       if (note.isEmpty) {
         _personalNotes.remove(id);
@@ -161,6 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCustomPositionBuilder() async {
+    if (_checkReadOnlyGuard()) return;
     final created = await Navigator.of(context).push<BilliardLesson>(
       MaterialPageRoute(
         builder: (_) => CustomPositionBuilderScreen(
