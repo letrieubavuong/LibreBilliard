@@ -539,5 +539,26 @@ class LessonPhysicsVerificationFixture {
       expectTargetZoneGather: true,
       notes: 'Bắc cầu qua vạch Amery: bi vàng 1 băng dài trái tái lập cự ly gom.',
     ),
+
+    // =========================================================================
+    // KỸ THUẬT KÉO VỀ (RAPPEL: RP-01)
+    // =========================================================================
+
+    // RP-01: Trô kéo về cơ bản 2/3 bi (Rappel de base 2/3 de bille)
+    'RP-01': const LessonPhysicsVerificationFixture(
+      lessonCode: 'RP-01',
+      expectedFirstBallHit: BallId.object1,
+      expectedLateralSign: -1.0, // Má phải chuẩn theo hình vẽ gốc
+      expectedContactFraction: 2.0 / 3.0,
+      contactFractionTolerance: 0.05,
+      expectedCuePostImpactMotion: CuePostImpactMotionType.drawBack,
+      minCueBallPostImpactDisplacementMeters: 0.15,
+      maxCueBallPostImpactDisplacementMeters: 0.85,
+      expectedYellowCushionSequence: [CushionId.shortNear],
+      expectCarom: true,
+      expectTargetZoneGather: true,
+      notes:
+          'Trô kéo về cơ bản 2/3 bi (Rappel de base): Bi 2 chạy ~1.8L (gần 2 chiều dài bàn), Bi 1 trô lùi giật xuống phải gom sát Bi 3.',
+    ),
   };
 }

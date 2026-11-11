@@ -428,9 +428,9 @@ void main() {
       }
     });
 
-    test('9. Nghiệm thu độc lập 15 bài học mẫu qua Fixture kỹ thuật: thứ tự chạm, má, fraction, số băng, chuỗi băng, đo kéo/tiến có dấu và gom bi', () {
+    test('9. Nghiệm thu độc lập 16 bài học mẫu qua Fixture kỹ thuật: thứ tự chạm, má, fraction, số băng, chuỗi băng, đo kéo/tiến có dấu và gom bi', () {
       final lessons = SampleLessonsRepository.lessons;
-      expect(lessons.length, 15, reason: 'Repository must contain exactly 15 lessons (4 KT, 4 GB, 4 BS, 3 SR)');
+      expect(lessons.length, 16, reason: 'Repository must contain exactly 16 lessons (4 KT, 4 GB, 4 BS, 3 SR, 1 RP)');
 
       int verifiedCount = 0;
       int unverifiedCount = 0;
@@ -466,8 +466,8 @@ void main() {
         }
       }
 
-      // 8 bài đạt chuẩn cơ học nội bộ mô hình và 7 bài trung thực giữ nhãn chưa kiểm chứng thực nghiệm bàn
-      expect(verifiedCount, 8, reason: 'Exactly 8 lessons meet 100% of physical criteria in 2.5D planar model');
+      // 9 bài đạt chuẩn cơ học nội bộ mô hình và 7 bài trung thực giữ nhãn chưa kiểm chứng thực nghiệm bàn
+      expect(verifiedCount, 9, reason: 'Exactly 9 lessons meet 100% of physical criteria in 2.5D planar model');
       expect(unverifiedCount, 7, reason: 'Exactly 7 lessons are transparently marked isPhysicsVerified: false');
     });
 
@@ -573,6 +573,53 @@ void main() {
       final repMinus6 = drawFixture.verify(createSimWithPostDisplacement(-0.006));
       expect(repMinus6.failures.any((f) => f.contains('không kéo lùi (Rétro)')), isFalse,
           reason: 's_par = -0.006m must satisfy draw-back motion direction');
+    });
+
+    test('9e. Kiểm chứng độc lập thế bi Trô kéo về 2/3 (RP-01 Rappel de base 2/3 de bille): Bảo toàn phân số 2/3, má phải, hồi bi ~1.8L và trô lùi gom bi', () {
+      final rp01 = SampleLessonsRepository.lessons.firstWhere((l) => l.code == 'RP-01');
+      expect(rp01.isPhysicsVerified, isTrue);
+
+      // 1. Kiểm tra fraction chính xác 2/3, không bị làm tròn thành 5/8 (0.625)
+      expect(rp01.shotParams.contact.fraction, closeTo(2.0 / 3.0, 1e-6));
+      expect(rp01.shotParams.contact.side, ContactSide.right);
+
+      // 2. Chạy mô phỏng qua CaromPhysicsSolver
+      final outcome = CaromPhysicsSolver.evaluateAdjustedShot(
+        lesson: rp01,
+        activeContact: rp01.shotParams.contact,
+        activeEffet: rp01.shotParams.effet,
+      );
+      expect(outcome.isInputValid, isTrue);
+      expect(outcome.hitsFirstObjectBall, isTrue);
+      expect(outcome.hitsSecondBall, isTrue);
+      expect(outcome.gathersInZone, isTrue);
+
+      // 3. Nghiệm thu độc lập qua Fixture
+      final fixture = LessonPhysicsVerificationFixture.fixtures['RP-01']!;
+      final report = fixture.verify(outcome.simulationResult);
+      expect(report.isPass, isTrue, reason: 'RP-01 failures: ${report.failures.join(', ')}');
+
+      // 4. Kiểm tra quãng đường bi 2 xấp xỉ 1.8 lần chiều dài bàn (~5.13m)
+      double s2 = 0.0;
+      final snaps = outcome.simulationResult.snapshots;
+      for (int i = 1; i < snaps.length; i++) {
+        s2 += (snaps[i].objectBall1.position - snaps[i - 1].objectBall1.position).length;
+      }
+      expect(s2, inInclusiveRange(4.5, 5.5), reason: 'Bi 2 phải chạy gần 2 chiều dài bàn (s2 = $s2 m)');
+
+      // 5. Kiểm tra tính toàn vẹn khi đổi má chạm: đổi má trái -> fraction vẫn là 2/3
+      final copyLeft = rp01.shotParams.contact.copyWith(side: ContactSide.left);
+      expect(copyLeft.fraction, closeTo(2.0 / 3.0, 1e-6));
+      expect(copyLeft.side, ContactSide.left);
+
+      // 6. Kiểm tra tinh chỉnh tốc độ ngọn cơ m/s liên tục qua activeCustomCueSpeed
+      final outcomeCustom = CaromPhysicsSolver.evaluateAdjustedShot(
+        lesson: rp01,
+        activeContact: rp01.shotParams.contact,
+        activeEffet: rp01.shotParams.effet,
+        activeCustomCueSpeed: 2.70,
+      );
+      expect(outcomeCustom.isSuccessfulShot, isTrue);
     });
 
     test('9c. Fixture Strict Null Checks: Thiếu số đo má chạm, fraction hoặc gom bi chưa xác định phải FAIL thay vì bỏ qua', () {

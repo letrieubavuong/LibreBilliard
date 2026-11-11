@@ -35,6 +35,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   late BallContactSpec _activeContact;
   late CueBallEffetSpec _activeEffet;
   late int _activeSpeedLevel;
+  double? _activeCustomCueSpeed;
   late TextEditingController _noteController;
   bool _customizeMode = false;
 
@@ -46,6 +47,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _activeContact = widget.lesson.shotParams.contact;
     _activeEffet = widget.lesson.shotParams.effet;
     _activeSpeedLevel = widget.lesson.shotParams.speedLevel;
+    _activeCustomCueSpeed = widget.lesson.shotParams.customCueSpeed;
     _noteController = TextEditingController(text: widget.personalNote ?? '');
   }
 
@@ -63,6 +65,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       activeContact: _activeContact,
       activeEffet: _activeEffet,
       activeSpeedLevel: _activeSpeedLevel,
+      activeCustomCueSpeed: _activeCustomCueSpeed,
     );
     final isSuccess = solvedOutcome.isSuccessfulShot;
 
@@ -260,6 +263,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                       _activeContact = lesson.shotParams.contact;
                       _activeEffet = lesson.shotParams.effet;
                       _activeSpeedLevel = lesson.shotParams.speedLevel;
+                      _activeCustomCueSpeed = lesson.shotParams.customCueSpeed;
                     }
                   });
                 },
@@ -280,6 +284,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               effet: _activeEffet,
               strokeType: lesson.shotParams.strokeType,
               speedLevel: _activeSpeedLevel,
+              customCueSpeed: _activeCustomCueSpeed,
             ),
             mode: _customizeMode
                 ? DiagramDisplayMode.interactive
@@ -288,8 +293,12 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                 setState(() => _activeContact = newContact),
             onEffetChanged: (newEffet) =>
                 setState(() => _activeEffet = newEffet),
-            onSpeedLevelChanged: (newSpeed) =>
-                setState(() => _activeSpeedLevel = newSpeed),
+            onSpeedLevelChanged: (newSpeed) => setState(() {
+              _activeSpeedLevel = newSpeed;
+              _activeCustomCueSpeed = null; // đồng bộ lại theo nấc lực mới
+            }),
+            onCustomCueSpeedChanged: (speed) =>
+                setState(() => _activeCustomCueSpeed = speed),
           ),
           const SizedBox(height: 18),
 

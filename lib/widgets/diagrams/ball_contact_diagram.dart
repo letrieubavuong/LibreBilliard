@@ -272,6 +272,21 @@ class _BallContactSliderControlsState extends State<BallContactSliderControls> {
     }
   }
 
+  void _selectSpecialFraction(double frac, String label) {
+    final targetSide = widget.spec.side == ContactSide.center
+        ? _savedNonCenterSide
+        : widget.spec.side;
+    _savedNonFullFraction = frac;
+    widget.onSpecChanged(
+      BallContactSpec(
+        label: label,
+        fraction: frac,
+        side: targetSide,
+        description: 'Độ dày chính xác $label theo tài liệu cơ bản',
+      ),
+    );
+  }
+
   void _onSideChanged(ContactSide newSide) {
     _savedNonCenterSide = newSide;
     if (_isFull) {
@@ -482,7 +497,33 @@ class _BallContactSliderControlsState extends State<BallContactSliderControls> {
                   onPressed: _toggleFull,
                 ),
         ),
+        const SizedBox(height: 6),
+
+        // 4. Các nút chọn nhanh độ dày chính xác (1/3, 1/2, 2/3)
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          alignment: WrapAlignment.center,
+          children: [
+            _buildSpecialFractionChip(1.0 / 3.0, '1/3 trái (33%)'),
+            _buildSpecialFractionChip(0.50, '1/2 trái (50%)'),
+            _buildSpecialFractionChip(2.0 / 3.0, '2/3 trái (67%)'),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildSpecialFractionChip(double targetFrac, String chipLabel) {
+    final isSelected = !_isFull && (widget.spec.fraction - targetFrac).abs() < 0.015;
+    return ChoiceChip(
+      label: Text(chipLabel, style: const TextStyle(fontSize: 9.5)),
+      selected: isSelected,
+      visualDensity: VisualDensity.compact,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.zero,
+      selectedColor: BilliardPalette.diamondGold.withValues(alpha: 0.35),
+      onSelected: (_) => _selectSpecialFraction(targetFrac, chipLabel),
     );
   }
 }

@@ -118,6 +118,7 @@ class ShotParametersDetailPanel extends StatelessWidget {
   final ValueChanged<BallContactSpec>? onContactChanged;
   final ValueChanged<CueBallEffetSpec>? onEffetChanged;
   final ValueChanged<int>? onSpeedLevelChanged;
+  final ValueChanged<double>? onCustomCueSpeedChanged;
 
   const ShotParametersDetailPanel({
     super.key,
@@ -126,6 +127,7 @@ class ShotParametersDetailPanel extends StatelessWidget {
     this.onContactChanged,
     this.onEffetChanged,
     this.onSpeedLevelChanged,
+    this.onCustomCueSpeedChanged,
   });
 
   @override
@@ -202,27 +204,75 @@ class ShotParametersDetailPanel extends StatelessWidget {
                   ),
                 ],
               ),
-              if (mode == DiagramDisplayMode.interactive &&
-                  onSpeedLevelChanged != null) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Text(
-                      'Điều chỉnh Lực:',
-                      style: TextStyle(fontSize: 11.5, color: Colors.white70),
-                    ),
-                    Expanded(
-                      child: Slider(
-                        value: params.speedLevel.toDouble(),
-                        min: 1,
-                        max: 5,
-                        divisions: 4,
-                        label: 'Lực ${params.speedLevel}/5',
-                        onChanged: (v) => onSpeedLevelChanged!(v.round()),
+              if (mode == DiagramDisplayMode.interactive) ...[
+                if (onSpeedLevelChanged != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Text(
+                        'Cấp Lực (1–5):',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
                       ),
-                    ),
-                  ],
-                ),
+                      Expanded(
+                        child: Slider(
+                          value: params.speedLevel.toDouble(),
+                          min: 1,
+                          max: 5,
+                          divisions: 4,
+                          label: 'Lực ${params.speedLevel}/5',
+                          onChanged: (v) => onSpeedLevelChanged!(v.round()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (onCustomCueSpeedChanged != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Text(
+                        'Tốc độ cơ (m/s):',
+                        style: TextStyle(fontSize: 11, color: Colors.white70),
+                      ),
+                      IconButton(
+                        tooltip: 'Giảm 0.1 m/s',
+                        icon: const Icon(Icons.remove_circle_outline, size: 16),
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        color: BilliardPalette.diamondGold,
+                        onPressed: () {
+                          final cur = params.effectiveCueSpeed;
+                          final next = (cur - 0.10).clamp(0.5, 5.0);
+                          onCustomCueSpeedChanged!(double.parse(next.toStringAsFixed(2)));
+                        },
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: params.effectiveCueSpeed.clamp(0.5, 5.0),
+                          min: 0.5,
+                          max: 5.0,
+                          divisions: 90, // bước 0.05 m/s
+                          label: '${params.effectiveCueSpeed.toStringAsFixed(2)} m/s',
+                          onChanged: (v) => onCustomCueSpeedChanged!(double.parse(v.toStringAsFixed(2))),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tăng 0.1 m/s',
+                        icon: const Icon(Icons.add_circle_outline, size: 16),
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        color: BilliardPalette.diamondGold,
+                        onPressed: () {
+                          final cur = params.effectiveCueSpeed;
+                          final next = (cur + 0.10).clamp(0.5, 5.0);
+                          onCustomCueSpeedChanged!(double.parse(next.toStringAsFixed(2)));
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ],
           ),

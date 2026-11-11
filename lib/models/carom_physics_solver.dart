@@ -213,6 +213,7 @@ class CaromPhysicsSolver {
     required BallContactSpec activeContact,
     required CueBallEffetSpec activeEffet,
     int? activeSpeedLevel,
+    double? activeCustomCueSpeed,
     Offset? activeAimTargetDiamond,
     double? activeExplicitAimAngleRadians,
   }) {
@@ -222,7 +223,7 @@ class CaromPhysicsSolver {
             activeContact.side == baseParams.contact.side;
 
     final effectiveSpeedLevel = activeSpeedLevel ?? baseParams.speedLevel;
-    final calibratedCueSpeed =
+    final calibratedCueSpeed = activeCustomCueSpeed ??
         baseParams.effectiveCueSpeedForLevel(effectiveSpeedLevel);
 
     // Nếu bài học có điểm ngắm tường minh (ví dụ đánh A-băng Bricole),
